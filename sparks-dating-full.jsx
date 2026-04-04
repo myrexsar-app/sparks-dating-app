@@ -2,8 +2,8 @@ import { useState, useRef, useEffect } from "react";
 
 const C = {
   bg: "#080810", surface: "#10101c", card: "#16162a", cardHover: "#1e1e35",
-  border: "#ffffff10", borderMid: "#ffffff1a", accent: "#ff4d6d",
-  accentDim: "#ff4d6d18", gold: "#f5c518", purple: "#8b5cf6",
+  border: "#ffffff10", borderMid: "#ffffff1a", accent: "#c026d3",
+  accentDim: "#c026d318", gold: "#f5c518", purple: "#8b5cf6",
   purpleDim: "#8b5cf618", green: "#10b981", blue: "#3b82f6",
   text: "#f0eaf8", muted: "#7a7590", subtle: "#3a3550",
 };
@@ -17,7 +17,7 @@ const PROFILES = [
 
 const PLANS = [
   { name:"Free", price:0, color:"#7a7590", features:["5 swipes/day","Basic matching"], cta:"Current plan" },
-  { name:"Pro", price:9.99, color:"#ff4d6d", popular:true, features:["Unlimited swipes","See who liked you","Smart match","1 Super Like/day"], cta:"Get Pro" },
+  { name:"Pro", price:9.99, color:"#c026d3", popular:true, features:["Unlimited swipes","See who liked you","Smart match","1 Super Like/day"], cta:"Get Pro" },
   { name:"VIP", price:24.99, color:"#f5c518", features:["Everything in Pro","Priority discovery","Video dates","Incognito mode"], cta:"Get VIP" },
 ];
 
@@ -66,8 +66,8 @@ export default function App() {
   if (!ageConfirmed) return (
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"system-ui"}}>
       <div style={{background:C.card,borderRadius:24,padding:40,maxWidth:400,width:"100%",textAlign:"center",border:`1px solid ${C.borderMid}`}}>
-        <div style={{fontSize:48}}>💘</div>
-        <h2 style={{color:C.text,margin:"12px 0 8px"}}>Welcome to Sparks</h2>
+        <div style={{fontSize:48}}>💜</div>
+        <h2 style={{color:C.text,margin:"12px 0 8px"}}>Welcome to VyndLove</h2>
         <p style={{color:C.muted,marginBottom:24}}>You must be <strong style={{color:C.text}}>18 or older</strong> to use this app. (COPPA compliant)</p>
         <div style={{display:"flex",gap:12}}>
           <button onClick={() => setAgeConfirmed(true)} style={{flex:1,background:C.accent,color:"#fff",border:"none",borderRadius:12,padding:"13px 0",cursor:"pointer",fontWeight:700}}>I am 18+ ✓</button>
@@ -88,10 +88,10 @@ export default function App() {
               <button onClick={() => setLegal(null)} style={{background:"none",border:"none",color:C.muted,fontSize:20,cursor:"pointer"}}>✕</button>
             </div>
             <div style={{color:C.muted,lineHeight:1.8,fontSize:14}}>
-              {legal==="privacy" && <><p><b style={{color:C.text}}>1. Data We Collect:</b> Name, age, photos, preferences, usage data. No data from users under 18 (COPPA).</p><p><b style={{color:C.text}}>2. How We Use It:</b> To operate the service and improve matching. We do not sell your data.</p><p><b style={{color:C.text}}>3. Your Rights (GDPR/CCPA):</b> Access, correct, delete, or export your data anytime via Settings.</p><p><b style={{color:C.text}}>4. Contact:</b> privacy@sparksapp.com</p></>}
-              {legal==="terms" && <><p><b style={{color:C.text}}>1. Eligibility:</b> Must be 18+.</p><p><b style={{color:C.text}}>2. Prohibited:</b> No fake profiles, harassment, spam, or illegal content.</p><p><b style={{color:C.text}}>3. Billing:</b> Subscriptions auto-renew. Cancel anytime. 7-day refund policy.</p><p><b style={{color:C.text}}>4. Governing Law:</b> New York, USA.</p></>}
+              {legal==="privacy" && <><p><b style={{color:C.text}}>1. Data We Collect:</b> Name, age, photos, preferences. No data from users under 18 (COPPA).</p><p><b style={{color:C.text}}>2. Your Rights (GDPR/CCPA):</b> Access, correct, delete your data anytime via Settings.</p><p><b style={{color:C.text}}>3. Contact:</b> privacy@vyndlove.com</p></>}
+              {legal==="terms" && <><p><b style={{color:C.text}}>1. Eligibility:</b> Must be 18+.</p><p><b style={{color:C.text}}>2. Prohibited:</b> No fake profiles, harassment, or illegal content.</p><p><b style={{color:C.text}}>3. Billing:</b> Subscriptions auto-renew. Cancel anytime. 7-day refund policy.</p><p><b style={{color:C.text}}>4. Governing Law:</b> New York, USA.</p></>}
               {legal==="cookies" && <><p><b style={{color:C.text}}>Essential:</b> Required for login and security.</p><p><b style={{color:C.text}}>Analytics:</b> Anonymous usage stats. Opt out in Settings.</p><p>We do not use advertising cookies.</p></>}
-              {legal==="safety" && <><p><b style={{color:C.text}}>Before Meeting:</b> Video chat first, tell someone where you're going, trust your instincts.</p><p><b style={{color:C.text}}>First Dates:</b> Meet in public, arrange own transport, don't leave drink unattended.</p><p><b style={{color:C.text}}>Emergency:</b> 911 | RAINN: 1-800-656-4673 | Crisis Text: HOME to 741741</p></>}
+              {legal==="safety" && <><p><b style={{color:C.text}}>Before Meeting:</b> Video chat first, tell someone where you're going.</p><p><b style={{color:C.text}}>First Dates:</b> Meet in public, arrange own transport.</p><p><b style={{color:C.text}}>Emergency:</b> 911 | RAINN: 1-800-656-4673 | Crisis Text: HOME to 741741</p></>}
             </div>
             <button onClick={() => setLegal(null)} style={{marginTop:20,background:C.accent,color:"#fff",border:"none",borderRadius:10,padding:"11px 24px",cursor:"pointer",fontWeight:700}}>Close</button>
           </div>
@@ -101,7 +101,7 @@ export default function App() {
       {matchPopup && (
         <div style={{position:"fixed",inset:0,background:"#000c",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
           <div style={{background:C.card,borderRadius:24,padding:40,maxWidth:340,width:"100%",textAlign:"center",border:`2px solid ${C.accent}`}}>
-            <div style={{fontSize:52}}>💘</div>
+            <div style={{fontSize:52}}>💜</div>
             <h2 style={{color:C.accent,margin:"10px 0 6px"}}>It's a Match!</h2>
             <p style={{color:C.muted}}>You and <b style={{color:C.text}}>{matchPopup.name}</b> liked each other!</p>
             <div style={{display:"flex",gap:10,marginTop:20}}>
@@ -113,7 +113,7 @@ export default function App() {
       )}
 
       <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"0 20px",display:"flex",alignItems:"center",justifyContent:"space-between",height:60,position:"sticky",top:0,zIndex:100}}>
-        <span style={{fontWeight:900,fontSize:20,background:`linear-gradient(135deg,${C.accent},${C.purple})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>💘 Sparks</span>
+        <span style={{fontWeight:900,fontSize:22,background:`linear-gradient(135deg,#c026d3,#8b5cf6)`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>💜 VyndLove</span>
         <nav style={{display:"flex",gap:2}}>
           {["Discover","Matches","Chat","Pricing","Settings"].map(n => (
             <button key={n} onClick={() => setPage(n)} style={{background:page===n?C.accentDim:"transparent",color:page===n?C.accent:C.muted,border:"none",borderRadius:8,padding:"7px 12px",cursor:"pointer",fontWeight:600,fontSize:13}}>
@@ -125,7 +125,7 @@ export default function App() {
 
       {page==="Discover" && (
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"36px 24px",gap:20}}>
-          <h1 style={{margin:0,fontSize:28,fontWeight:900}}>Find Your <span style={{color:C.accent}}>Spark</span> ✨</h1>
+          <h1 style={{margin:0,fontSize:28,fontWeight:900}}>Find Your <span style={{color:C.accent}}>Match</span> 💜</h1>
           {current ? (
             <div style={{position:"relative",width:"100%",maxWidth:380}}>
               {profiles[1] && <div style={{position:"absolute",top:10,left:10,right:10,bottom:-10,background:C.cardHover,borderRadius:24,zIndex:0}}/>}
@@ -167,7 +167,7 @@ export default function App() {
           <h1 style={{margin:"0 0 20px"}}>Your Matches 💞</h1>
           {liked.length===0 ? (
             <div style={{textAlign:"center",padding:60,background:C.card,borderRadius:20}}>
-              <div style={{fontSize:48}}>💘</div>
+              <div style={{fontSize:48}}>💜</div>
               <p style={{color:C.muted}}>No matches yet — go swipe!</p>
               <button onClick={() => setPage("Discover")} style={{background:C.accent,color:"#fff",border:"none",borderRadius:10,padding:"10px 24px",cursor:"pointer",fontWeight:700}}>Start Swiping 🔥</button>
             </div>
@@ -207,8 +207,8 @@ export default function App() {
                   <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${chatWith.color},${chatWith.color}66)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>{chatWith.emoji}</div>
                   <div><div style={{fontWeight:700}}>{chatWith.name}</div><div style={{color:C.green,fontSize:12}}>● Online</div></div>
                 </div>
-                <div style={{background:"#f5c51812",padding:"8px 20px",fontSize:12,color:"#f5c518"}}>
-                  🛡 Never share personal info with someone you haven't met in person.
+                <div style={{background:"#c026d312",padding:"8px 20px",fontSize:12,color:"#c026d3"}}>
+                  💜 Never share personal info with someone you haven't met in person.
                 </div>
                 <div style={{flex:1,overflowY:"auto",padding:20}}>
                   {(messages[chatWith.id]||[]).map((m,i) => (
@@ -220,9 +220,9 @@ export default function App() {
                   ))}
                 </div>
                 <div style={{padding:"12px 16px",borderTop:`1px solid ${C.border}`,display:"flex",gap:10}}>
-                  <input value={newMsg} onChange={e => setNewMsg(e.target.value)} onKeyDown={e => e.key==="Enter" && (() => { if(newMsg.trim()){setMessages(prev=>({...prev,[chatWith.id]:[...(prev[chatWith.id]||[]),{from:"me",text:newMsg.trim(),time:"Now"}]}));setNewMsg("");}})()}
+                  <input value={newMsg} onChange={e => setNewMsg(e.target.value)} onKeyDown={e => e.key==="Enter" && (() => { if(newMsg.trim()){setMessages(prev=>({...prev,[chatWith.id]:[...(prev[chatWith.id]||[]),{from:"me",text:newMsg.trim()}]}));setNewMsg("");}})()}
                     placeholder={`Message ${chatWith.name}...`} style={{flex:1,background:C.card,border:`1px solid ${C.borderMid}`,borderRadius:24,padding:"10px 18px",color:C.text,fontSize:14,outline:"none"}}/>
-                  <button onClick={() => { if(newMsg.trim()){setMessages(prev=>({...prev,[chatWith.id]:[...(prev[chatWith.id]||[]),{from:"me",text:newMsg.trim(),time:"Now"}]}));setNewMsg("");}}} style={{background:C.accent,border:"none",borderRadius:24,padding:"10px 20px",cursor:"pointer",color:"#fff",fontWeight:700}}>Send</button>
+                  <button onClick={() => { if(newMsg.trim()){setMessages(prev=>({...prev,[chatWith.id]:[...(prev[chatWith.id]||[]),{from:"me",text:newMsg.trim()}]}));setNewMsg("");}}} style={{background:C.accent,border:"none",borderRadius:24,padding:"10px 20px",cursor:"pointer",color:"#fff",fontWeight:700}}>Send</button>
                 </div>
               </>
             ) : <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:C.muted}}>Select a conversation 💬</div>}
@@ -233,7 +233,7 @@ export default function App() {
       {page==="Pricing" && (
         <div style={{maxWidth:860,margin:"0 auto",padding:"40px 24px"}}>
           <div style={{textAlign:"center",marginBottom:40}}>
-            <h1 style={{margin:"0 0 8px",fontSize:32,fontWeight:900}}>Upgrade Your Love Life ⚡</h1>
+            <h1 style={{margin:"0 0 8px",fontSize:32,fontWeight:900}}>Find Your Perfect Match ⚡</h1>
             <p style={{color:C.muted}}>Cancel anytime · Secure checkout · No hidden fees</p>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:20,marginBottom:36}}>
@@ -254,7 +254,7 @@ export default function App() {
                 <button key={k} onClick={() => setLegal(k)} style={{background:"transparent",color:C.accent,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 14px",cursor:"pointer",fontSize:13}}>{l} →</button>
               ))}
             </div>
-            <p style={{color:C.muted,fontSize:12,marginTop:14}}>GDPR · CCPA · COPPA Compliant · Payments by Stripe</p>
+            <p style={{color:C.muted,fontSize:12,marginTop:14}}>GDPR · CCPA · COPPA Compliant · Payments by Stripe · © 2025 VyndLove Inc.</p>
           </div>
         </div>
       )}
@@ -282,11 +282,11 @@ export default function App() {
       )}
 
       <div style={{textAlign:"center",padding:"24px",color:C.muted,fontSize:12,borderTop:`1px solid ${C.border}`,marginTop:40}}>
-        💘 Sparks Inc. · New York, NY ·{" "}
+        💜 VyndLove Inc. · New York, NY ·{" "}
         {[["Privacy","privacy"],["Terms","terms"],["Safety","safety"]].map(([l,k],i) => (
           <span key={k}>{i>0?" · "}<button onClick={() => setLegal(k)} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",textDecoration:"underline",fontSize:12,padding:0}}>{l}</button></span>
         ))}
-        <br/>© 2025 Sparks Inc. All rights reserved · GDPR · CCPA · COPPA
+        <br/>© 2025 VyndLove Inc. All rights reserved · GDPR · CCPA · COPPA
       </div>
     </div>
   );
