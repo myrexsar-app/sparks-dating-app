@@ -55,8 +55,8 @@ const FIREBASE_CONFIG = {
 //  (Create them at: dashboard.stripe.com → Payment Links)
 // ============================================================
 const STRIPE_LINKS = {
-  pro: "https://buy.stripe.com/test_6oUaEX8fL3qp8JYaJEbEA00",   // $9.99/mo
-  vip: "https://buy.stripe.com/test_28EfZh2Vre538JY6tobEA01",   // $24.99/mo
+  pro: "https://buy.stripe.com/28EcN51TZdnI1rKgIGgbm00",   // $9.99/mo
+  vip: "https://buy.stripe.com/cNi6oHaqv1F02vObomgbm01",   // $24.99/mo
 };
 
 // ============================================================
@@ -720,3 +720,28 @@ export default function App() {
     </div>
   );
 }
+
+// ============================================================
+//  📋 SETUP GUIDE
+// ============================================================
+//
+//  STEP 1 — FIREBASE SETUP:
+//  1. Go to https://console.firebase.google.com
+//  2. Click "Add project" → name it "vyndlove" → Create
+//  3. Click the </> icon (Web app) → Register app → Copy the config
+//  4. Paste the config into FIREBASE_CONFIG above
+//  5. In Firebase console → Authentication → Get started → Email/Password → Enable
+//  6. In Firebase console → Firestore Database → Create database → Start in test mode
+//
+//  STEP 2 — STRIPE PAYMENT LINKS:
+//  1. In Stripe dashboard → Products → + Add product
+//     • Name: "VyndLove Pro" | Price: $9.99 | Recurring: Monthly → Save
+//  2. Add another product:
+//     • Name: "VyndLove VIP" | Price: $24.99 | Recurring: Monthly → Save
+//  3. For each product → click "Create payment link" → Copy link URL
+//  4. Paste links into STRIPE_LINKS above
+//
+//  STEP 3 — INSTALL & RUN:
+//  npm install firebase
+//  (then deploy to Vercel as before)
+// ============================================================
