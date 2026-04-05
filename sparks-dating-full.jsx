@@ -59,6 +59,8 @@ const STRIPE_LINKS = {
   vip: "https://buy.stripe.com/cNi6oHaqv1F02vObomgbm01",   // $24.99/mo
 };
 
+const STRIPE_PORTAL = "https://billing.stripe.com/p/login/28EcN51TZdnI1rKgIGgbm00";
+
 // ============================================================
 const app = initializeApp(FIREBASE_CONFIG);
 const auth = getAuth(app);
@@ -211,6 +213,11 @@ export default function App() {
     };
     await setDoc(doc(db, "users", user.uid), data);
     setUserProfile(data);
+    setSetupMode(false);
+  };
+
+  // ---- Swipe ----
+  const h  setUserProfile(data);
     setSetupMode(false);
   };
 
@@ -687,6 +694,13 @@ export default function App() {
               </div>
             )}
           </div>
+
+          {isPremium && (
+            <div style={{ background:C.purpleDim, borderRadius:12, padding:16, border:`1px solid ${C.purple}`, marginBottom:12 }}>
+              <p style={{ color:C.purple, margin:"0 0 10px", fontWeight:600 }}>⭐ Active {userProfile?.plan?.toUpperCase()} subscription</p>
+              <button onClick={() => window.open(STRIPE_PORTAL, "_blank")} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:8, padding:"9px 20px", cursor:"pointer", fontWeight:700, fontSize:13 }}>Manage Subscription</button>
+            </div>
+          )}
 
           {!isPremium && (
             <div style={{ background:C.accentDim, borderRadius:12, padding:16, border:`1px solid ${C.accent}`, marginBottom:12 }}>
