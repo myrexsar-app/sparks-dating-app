@@ -217,11 +217,6 @@ export default function App() {
   };
 
   // ---- Swipe ----
-  const h  setUserProfile(data);
-    setSetupMode(false);
-  };
-
-  // ---- Swipe ----
   const handleSwipe = async (dir) => {
     const current = profiles[0];
     if (!current) return;
