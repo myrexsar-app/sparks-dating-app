@@ -132,6 +132,9 @@ export default function App() {
   const [newMsg,      setNewMsg]      = useState("");
   const [legal,       setLegal]       = useState(null);
   const [swipesUsed,  setSwipesUsed]  = useState(0);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelStatus,    setCancelStatus]    = useState(null); // null|'loading'|'done'|'error'
+  const [cancelDate,      setCancelDate]      = useState(null);
   const dragStart = useRef(null);
 
   // ---- Auth listener ----
@@ -214,6 +217,29 @@ export default function App() {
     await setDoc(doc(db, "users", user.uid), data);
     setUserProfile(data);
     setSetupMode(false);
+  };
+
+  // ---- Cancel subscription ----
+  const handleCancelSubscription = async () => {
+    setCancelStatus("loading");
+    try {
+      const resp = await fetch("/api/cancel-subscription", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: user.email }),
+      });
+      const data = await resp.json();
+      if (data.success) {
+        setCancelStatus("done");
+        setCancelDate(new Date(data.cancelAt * 1000).toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" }));
+        await updateDoc(doc(db, "users", user.uid), { cancelAtPeriodEnd: true });
+        setUserProfile(p => ({ ...p, cancelAtPeriodEnd: true }));
+      } else {
+        setCancelStatus("error");
+      }
+    } catch {
+      setCancelStatus("error");
+    }
   };
 
   // ---- Swipe ----
@@ -406,6 +432,46 @@ export default function App() {
   // ===================== MAIN APP =====================
   return (
     <div style={{ minHeight:"100vh", background:C.bg, color:C.text, fontFamily:"system-ui" }}>
+
+      {/* ---- Cancel Subscription Modal ---- */}
+      {showCancelModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.88)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+          <div style={{ background:C.card, borderRadius:24, padding:36, maxWidth:400, width:"100%", textAlign:"center", border:`1px solid #ef444440` }}>
+            {cancelStatus === "done" ? (
+              <>
+                <div style={{ fontSize:48, marginBottom:12 }}>✓</div>
+                <h2 style={{ color:"#10b981", margin:"0 0 10px" }}>Cancellation Confirmed</h2>
+                <p style={{ color:C.muted, marginBottom:24 }}>Your subscription will end on <strong style={{ color:C.text }}>{cancelDate}</strong>. You keep full access until then.</p>
+                <button onClick={() => setShowCancelModal(false)} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:12, padding:"12px 32px", cursor:"pointer", fontWeight:700, fontSize:15 }}>Got it</button>
+              </>
+            ) : cancelStatus === "error" ? (
+              <>
+                <div style={{ fontSize:48, marginBottom:12 }}>⚠️</div>
+                <h2 style={{ color:"#ef4444", margin:"0 0 10px" }}>Something went wrong</h2>
+                <p style={{ color:C.muted, marginBottom:24 }}>We couldn't cancel your subscription. Please try again or contact support.</p>
+                <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
+                  <button onClick={() => setShowCancelModal(false)} style={{ background:"transparent", color:C.muted, border:`1px solid ${C.border}`, borderRadius:12, padding:"11px 24px", cursor:"pointer" }}>Close</button>
+                  <button onClick={handleCancelSubscription} style={{ background:"#ef4444", color:"#fff", border:"none", borderRadius:12, padding:"11px 24px", cursor:"pointer", fontWeight:700 }}>Try Again</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize:48, marginBottom:12 }}>😢</div>
+                <h2 style={{ color:C.text, margin:"0 0 8px" }}>Cancel your {userProfile?.plan?.toUpperCase()} subscription?</h2>
+                <p style={{ color:C.muted, marginBottom:8 }}>You'll keep all {userProfile?.plan?.toUpperCase()} benefits until the end of your current billing period.</p>
+                <p style={{ color:C.muted, fontSize:13, marginBottom:28 }}>After that, your account will switch to the Free plan (15 swipes/day).</p>
+                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                  <button onClick={() => setShowCancelModal(false)} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:12, padding:"13px 0", cursor:"pointer", fontWeight:700, fontSize:15 }}>Keep My Subscription</button>
+                  <button onClick={handleCancelSubscription} disabled={cancelStatus === "loading"}
+                    style={{ background:"transparent", color:"#ef4444", border:"1px solid #ef444455", borderRadius:12, padding:"11px 0", cursor:"pointer", fontWeight:600, fontSize:14 }}>
+                    {cancelStatus === "loading" ? "Cancelling…" : "Yes, Cancel Subscription"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ---- Paywall ---- */}
       {showPaywall && (
@@ -693,7 +759,10 @@ export default function App() {
           {isPremium && (
             <div style={{ background:C.purpleDim, borderRadius:12, padding:16, border:`1px solid ${C.purple}`, marginBottom:12 }}>
               <p style={{ color:C.purple, margin:"0 0 10px", fontWeight:600 }}>⭐ Active {userProfile?.plan?.toUpperCase()} subscription</p>
-              <button onClick={() => window.open(STRIPE_PORTAL, "_blank")} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:8, padding:"9px 20px", cursor:"pointer", fontWeight:700, fontSize:13 }}>Manage Subscription</button>
+              {userProfile?.cancelAtPeriodEnd
+                ? <p style={{ color:C.muted, fontSize:13, margin:0 }}>✓ Cancellation scheduled — you keep access until the end of your billing period.</p>
+                : <button onClick={() => { setShowCancelModal(true); setCancelStatus(null); }} style={{ background:"transparent", color:"#ef4444", border:"1px solid #ef444455", borderRadius:8, padding:"9px 20px", cursor:"pointer", fontWeight:700, fontSize:13 }}>Cancel Subscription</button>
+              }
             </div>
           )}
 
