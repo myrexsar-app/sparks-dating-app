@@ -1,5 +1,5 @@
 // ============================================================
-//  VyndLove — Hinge-Style Dating App v6.0
+//  VyndLove — Hinge-Style Dating App v7.0
 //  Stack: React + Firebase (Auth, Firestore) + Stripe
 //  Encoding: UTF-8 throughout — no Latin-1 artifacts
 // ============================================================
@@ -30,6 +30,7 @@ import {
   where, getDocs, onSnapshot, orderBy, serverTimestamp, updateDoc,
   increment, deleteDoc, limit, Timestamp,
 } from "firebase/firestore";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 
 /* ─── Firebase Config ─── */
 const FIREBASE_CONFIG = {
@@ -45,6 +46,7 @@ const FIREBASE_CONFIG = {
 const app = initializeApp(FIREBASE_CONFIG);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
 
 /* ─── Constants ─── */
 const IS_MOBILE_BUILD = false;
@@ -1450,7 +1452,6 @@ export default function App() {
   if (!ageConfirmed) {
     return (
       <div dir={isRTL ? "rtl" : "ltr"} style={{ background: "var(--bg)", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <style>{CSS}</style>
         <div className="fade-in" style={{ textAlign: "center", padding: "32px", maxWidth: "400px" }}>
           <div style={{ fontSize: "64px", marginBottom: "16px" }}>{"\u2764\uFE0F"}</div>
           <h1 style={{ fontSize: "28px", fontWeight: 800, marginBottom: "8px", background: "var(--accent-gradient)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
@@ -1476,7 +1477,6 @@ export default function App() {
   if (authLoading) {
     return (
       <div style={{ background: "var(--bg)", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <style>{CSS}</style>
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: "48px", animation: "pulse 1.5s infinite" }}>{"\u2764\uFE0F"}</div>
           <p style={{ color: "var(--text-secondary)", marginTop: "16px" }}>Loading...</p>
@@ -1495,7 +1495,6 @@ export default function App() {
   if (!profile || !profile.name) {
     return (
       <div dir={isRTL ? "rtl" : "ltr"}>
-        <style>{CSS}</style>
         <ProfileEditor
           t={t} isRTL={isRTL}
           profile={profile || {}}
@@ -1514,7 +1513,6 @@ export default function App() {
 
   return (
     <div dir={isRTL ? "rtl" : "ltr"} id="root">
-      <style>{CSS}</style>
 
       {/* ─── Toast ─── */}
       {toast && (
@@ -1820,7 +1818,6 @@ function AuthScreen({ t, isRTL, onLogin, onSignup }) {
 
   return (
     <div dir={isRTL ? "rtl" : "ltr"} style={{ background: "var(--bg)", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <style>{CSS}</style>
       <div className="fade-in" style={{ width: "100%", maxWidth: "380px", padding: "32px" }}>
         <div style={{ textAlign: "center", marginBottom: "40px" }}>
           <div style={{ fontSize: "48px", marginBottom: "8px" }}>{"\u2764\uFE0F"}</div>
@@ -1907,11 +1904,26 @@ function ProfileEditor({ t, isRTL, profile, isNew, onSave, onCancel }) {
     setForm(f => ({ ...f, prompts: newPrompts }));
   };
 
-  const addPhotoUrl = () => {
-    const url = prompt("Enter photo URL:");
-    if (url && form.photos.length < MAX_PHOTOS) {
-      setForm(f => ({ ...f, photos: [...f.photos, url] }));
+  const fileInputRef = useRef(null);
+
+  const handleFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (form.photos.length < MAX_PHOTOS) {
+          setForm(f => ({ ...f, photos: [...f.photos, reader.result] }));
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error("Photo upload error:", err);
     }
+  };
+
+  const addPhotoUrl = () => {
+    fileInputRef.current?.click();
   };
 
   const removePhoto = (idx) => {
@@ -1938,7 +1950,6 @@ function ProfileEditor({ t, isRTL, profile, isNew, onSave, onCancel }) {
 
   return (
     <div dir={isRTL ? "rtl" : "ltr"} style={{ background: "var(--bg)", minHeight: "100vh" }}>
-      <style>{CSS}</style>
       <div className="header">
         {!isNew && (
           <button className="btn btn-ghost btn-icon btn-icon-sm" onClick={onCancel}>
@@ -1954,6 +1965,13 @@ function ProfileEditor({ t, isRTL, profile, isNew, onSave, onCancel }) {
         <div className="profile-section" style={{ border: "none", padding: "0 0 16px" }}>
           <h3 className="profile-section-title">{t.photos} ({form.photos.length}/{MAX_PHOTOS})</h3>
           <div className="profile-photo-grid">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileSelect}
+              style={{ display: "none" }}
+            />
             {Array.from({ length: MAX_PHOTOS }).map((_, i) => (
               <div
                 key={i}
@@ -2418,6 +2436,17 @@ function ChatView({ t, isRTL, user, profile, otherUser, messages, msgText, setMs
 
       {/* Messages */}
       <div className="messages-container">
+        {/* Typing indicator */}
+        {otherUser?.typing && (
+          <div style={{ padding: "8px 16px", display: "flex", alignItems: "center", gap: "4px" }}>
+            <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Typing</span>
+            <div style={{ display: "flex", gap: "3px" }}>
+              <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "var(--text-secondary)", animation: "pulse 0.6s infinite" }} />
+              <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "var(--text-secondary)", animation: "pulse 0.6s infinite 0.2s" }} />
+              <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "var(--text-secondary)", animation: "pulse 0.6s infinite 0.4s" }} />
+            </div>
+          </div>
+        )}
         {messages.map((msg) => (
           <div key={msg.id} className={`message-row ${msg.from === user.uid ? "sent" : "received"}`}>
             <div>
@@ -2526,7 +2555,6 @@ function MyProfileScreen({ t, isRTL, profile, isPremium, onEdit, onSettings, onS
 function SettingsScreen({ t, isRTL, lang, setLang, darkMode, setDarkMode, filters, setFilters, isPremium, onEditProfile, onShowPremium, onShowTerms, onShowPrivacy, onShowSafety, onDeleteAccount, onLogout }) {
   return (
     <div dir={isRTL ? "rtl" : "ltr"} style={{ background: "var(--bg)", minHeight: "100vh" }}>
-      <style>{CSS}</style>
       <div className="header">
         <span className="header-title">{t.settings}</span>
       </div>
@@ -2610,7 +2638,6 @@ function FiltersScreen({ t, isRTL, filters, setFilters, isPremium, onClose }) {
 
   return (
     <div dir={isRTL ? "rtl" : "ltr"} style={{ background: "var(--bg)", minHeight: "100vh" }}>
-      <style>{CSS}</style>
       <div className="header">
         <button className="btn btn-ghost btn-icon btn-icon-sm" onClick={() => { setFilters(local); onClose(); }}>
           <Icon name="back" size={20} />
