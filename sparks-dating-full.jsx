@@ -1,5 +1,5 @@
 // ============================================================
-//  VyndLove - Intent-Driven Dating App v3
+//  VyndLove - Intent-Driven Dating App v4 (App Store Compliance)
 //  Stack: React + Firebase (Auth, Firestore) + Stripe
 // ============================================================
 
@@ -7,7 +7,7 @@ import { useState, useEffect, useRef } from "react";
 import { initializeApp } from "firebase/app";
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  onAuthStateChanged, signOut,
+  onAuthStateChanged, signOut, deleteUser,
 } from "firebase/auth";
 import {
   getFirestore, doc, setDoc, getDoc, collection, addDoc, query,
@@ -30,6 +30,9 @@ const STRIPE_LINKS = {
   pro:   "https://buy.stripe.com/28EcN51TZdnI1rKgIGgbm00",
   elite: "https://buy.stripe.com/cNi6oHaqv1F02vObomgbm01",
 };
+
+const SUPPORT_EMAIL  = "support@vyndlove.com";
+const IS_MOBILE_BUILD = false; // set true on native builds to hide Stripe
 
 const app  = initializeApp(FIREBASE_CONFIG);
 const auth = getAuth(app);
@@ -71,8 +74,7 @@ const C = {
   accentDim: "#c026d318", gold: "#f5c518", goldDim: "#f5c51818",
   purple: "#8b5cf6", purpleDim: "#8b5cf618",
   green: "#10b981", greenDim: "#10b98118",
-  red: "#ef4444", text: "#f0eaf8", muted: "#7a7590",
-  elite: "#f59e0b",
+  red: "#ef4444", text: "#f0eaf8", muted: "#7a7590", elite: "#f59e0b",
 };
 
 const PLANS = [
@@ -113,7 +115,7 @@ function timeAgo(ts) {
 
 // ============================================================
 export default function App() {
-  // ─── Auth
+  // ââ Auth
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [user,         setUser]         = useState(null);
   const [userProfile,  setUserProfile]  = useState(null);
@@ -124,7 +126,7 @@ export default function App() {
   const [authError,    setAuthError]    = useState("");
   const [setupMode,    setSetupMode]    = useState(false);
 
-  // ─── Setup wizard
+  // ââ Setup wizard
   const [step,            setStep]           = useState(0);
   const [setupName,       setSetupName]      = useState("");
   const [setupAge,        setSetupAge]       = useState("");
@@ -140,20 +142,20 @@ export default function App() {
     { q: PROMPT_OPTIONS[2], a: "" },
   ]);
 
-  // ─── Navigation
+  // ââ Navigation
   const [page,        setPage]        = useState("Discover");
-  const [discoverTab, setDiscoverTab] = useState("feed"); // feed | compatible | standouts
+  const [discoverTab, setDiscoverTab] = useState("feed");
 
-  // ─── Discover
+  // ââ Discover
   const [profiles,    setProfiles]    = useState([]);
   const [compatible,  setCompatible]  = useState(null);
   const [standouts,   setStandouts]   = useState([]);
   const [viewProfile, setViewProfile] = useState(null);
 
-  // ─── Likes received (Pro)
+  // ââ Likes received (Pro)
   const [likesReceived, setLikesReceived] = useState([]);
 
-  // ─── Like flow
+  // ââ Like flow
   const [likeTarget,   setLikeTarget]   = useState(null);
   const [likeComment,  setLikeComment]  = useState("");
   const [likeError,    setLikeError]    = useState("");
@@ -161,7 +163,7 @@ export default function App() {
   const [likesUsed,    setLikesUsed]    = useState(0);
   const [priorityUsed, setPriorityUsed] = useState(0);
 
-  // ─── Matches & chat
+  // ââ Matches & chat
   const [matches,   setMatches]  = useState([]);
   const [chatWith,  setChatWith] = useState(null);
   const [messages,  setMessages] = useState([]);
@@ -169,7 +171,7 @@ export default function App() {
   const [yourTurn,  setYourTurn] = useState(0);
   const messagesEndRef = useRef(null);
 
-  // ─── UI modals
+  // ââ UI modals
   const [matchPopup,      setMatchPopup]      = useState(null);
   const [showPaywall,     setShowPaywall]      = useState(false);
   const [legal,           setLegal]            = useState(null);
@@ -181,47 +183,64 @@ export default function App() {
   const [cancelStatus,    setCancelStatus]     = useState(null);
   const [cancelDate,      setCancelDate]       = useState(null);
 
-  // ─── Auth listener
+  // ââ v4 compliance state
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deletingAccount,   setDeletingAccount]   = useState(false);
+  const [showContact,       setShowContact]        = useState(false);
+  const [profanityWarning,  setProfanityWarning]   = useState(false);
+  const [showPreLoginLegal, setShowPreLoginLegal]  = useState(null); // "privacy" | "terms"
+  const [loadError,         setLoadError]          = useState(null);
+
+  // ââ Auth listener
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
-        const snap = await getDoc(doc(db, "users", u.uid));
-        if (snap.exists()) {
-          const data = snap.data();
-          setUserProfile(data);
-          setLikesUsed(data.likesUsedToday || 0);
-          setPriorityUsed(data.priorityLikesUsedThisWeek || 0);
-          setSetupMode(false);
-        } else {
-          setSetupMode(true);
+        try {
+          const snap = await getDoc(doc(db, "users", u.uid));
+          if (snap.exists()) {
+            const data = snap.data();
+            setUserProfile(data);
+            setLikesUsed(data.likesUsedToday || 0);
+            setPriorityUsed(data.priorityLikesUsedThisWeek || 0);
+            setSetupMode(false);
+          } else {
+            setSetupMode(true);
+          }
+          setLoadError(null);
+        } catch (e) {
+          setLoadError("Failed to load your profile. Please check your connection.");
         }
       }
       setLoading(false);
     });
   }, []);
 
-  // ─── Load profiles
+  // ââ Load profiles
   useEffect(() => {
     if (!user || !userProfile) return;
     (async () => {
-      const snap = await getDocs(collection(db, "users"));
-      const blocked = userProfile.blockedUsers || [];
-      const all = snap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter(p => p.id !== user.uid && !blocked.includes(p.id));
-      setProfiles(all);
-      // Standouts: require MIN_PHOTOS photos AND 3 filled prompts
-      const curated = all.filter(p =>
-        (p.photos||[]).filter(Boolean).length >= MIN_PHOTOS &&
-        (p.prompts||[]).filter(pr => pr.a).length >= 3
-      );
-      setStandouts(curated.slice(0, 10));
-      loadCompatible(user.uid, all);
+      try {
+        const snap = await getDocs(collection(db, "users"));
+        const blocked = userProfile.blockedUsers || [];
+        const all = snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(p => p.id !== user.uid && !blocked.includes(p.id));
+        setProfiles(all);
+        const curated = all.filter(p =>
+          (p.photos||[]).filter(Boolean).length >= MIN_PHOTOS &&
+          (p.prompts||[]).filter(pr => pr.a).length >= 3
+        );
+        setStandouts(curated.slice(0, 10));
+        loadCompatible(user.uid, all);
+      } catch (e) {
+        setLoadError("Failed to load profiles. Tap to retry.");
+      }
     })();
   }, [user, userProfile]);
 
-  // ─── Load matches (real-time)
+  // ââ Load matches (real-time)
   useEffect(() => {
     if (!user) return;
     const q = query(collection(db, "matches"), where("users", "array-contains", user.uid));
@@ -230,10 +249,10 @@ export default function App() {
       setMatches(ms);
       const yt = ms.filter(m => m.lastMessageFrom && m.lastMessageFrom !== user.uid).length;
       setYourTurn(yt);
-    });
+    }, () => setLoadError("Connection issue. Some data may be stale."));
   }, [user]);
 
-  // ─── Load chat messages
+  // ââ Load chat messages
   useEffect(() => {
     if (!chatWith || !user) return;
     const mid = matchId(user.uid, chatWith.userId);
@@ -246,7 +265,7 @@ export default function App() {
     return unsub;
   }, [chatWith, user]);
 
-  // ─── Load likes received (Pro/Elite only)
+  // ââ Load likes received (Pro/Elite only)
   useEffect(() => {
     if (!user || !userProfile) return;
     const isPrem = userProfile.plan === "pro" || userProfile.plan === "elite";
@@ -257,7 +276,6 @@ export default function App() {
         where("to", "==", user.uid)
       ));
       const rawLikes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      // Deduplicate by sender, keep most recent
       const byUser = {};
       rawLikes.forEach(l => {
         if (!byUser[l.from] || l.createdAt > byUser[l.from].createdAt) byUser[l.from] = l;
@@ -266,7 +284,7 @@ export default function App() {
     })();
   }, [user, userProfile]);
 
-  // ─── Most Compatible
+  // ââ Most Compatible
   const loadCompatible = async (uid, allProfiles) => {
     const compDoc = await getDoc(doc(db, "compatible", uid));
     if (compDoc.exists()) {
@@ -286,7 +304,7 @@ export default function App() {
     }
   };
 
-  // ─── Auth
+  // ââ Auth
   const handleAuth = async () => {
     setAuthError("");
     try {
@@ -301,7 +319,7 @@ export default function App() {
     }
   };
 
-  // ─── Save profile (enforce 4 photos minimum)
+  // ââ Save profile
   const saveProfile = async () => {
     if (!setupName || !setupAge || !setupCity || !setupGender) return;
     if (setupPrompts.some(p => !p.a.trim())) return;
@@ -326,10 +344,10 @@ export default function App() {
     setSetupMode(false);
   };
 
-  // ─── Send Like
+  // ââ Send Like
   const sendLike = async (isPriority = false) => {
     if (!likeTarget || !user) return;
-    if (hasProfanity(likeComment)) { setLikeError("Please keep it respectful 🙏"); return; }
+    if (hasProfanity(likeComment)) { setLikeError("Please keep it respectful ð"); return; }
     setLikeSending(true);
     const isPrem = userProfile?.plan === "pro" || userProfile?.plan === "elite";
 
@@ -349,9 +367,8 @@ export default function App() {
       }
     }
 
-    // Your Turn gate
     if (yourTurn >= MAX_YOUR_TURN && !isPriority) {
-      setLikeError("Reply to your waiting conversations first 💬");
+      setLikeError("Reply to your waiting conversations first ð¬");
       setLikeSending(false);
       return;
     }
@@ -366,7 +383,6 @@ export default function App() {
       createdAt: serverTimestamp(),
     });
 
-    // Check mutual → create match
     const theirLikes = await getDocs(query(
       collection(db, "likes"),
       where("from", "==", profileId),
@@ -383,7 +399,6 @@ export default function App() {
       setMatchPopup(matchedProfile ? { ...matchedProfile, userId: profileId } : null);
     }
 
-    // Update counters
     const today = new Date().toDateString();
     const week  = getWeek();
     const updates = { lastLikeDate: today, lastActive: serverTimestamp() };
@@ -399,14 +414,13 @@ export default function App() {
       updates.lastPriorityWeek = week;
     }
     await updateDoc(doc(db, "users", user.uid), updates);
-
     setLikeTarget(null); setLikeComment(""); setLikeError(""); setLikeSending(false);
   };
 
-  // ─── Send message
+  // ââ Send message (v4: warn on profanity instead of silently block)
   const sendMsg = async () => {
     if (!newMsg.trim() || !chatWith || !user) return;
-    if (hasProfanity(newMsg)) return;
+    if (hasProfanity(newMsg)) { setProfanityWarning(true); return; }
     const mid = matchId(user.uid, chatWith.userId);
     await addDoc(collection(db, "chats", mid, "messages"), {
       text: newMsg.trim(), from: user.uid, createdAt: serverTimestamp(),
@@ -422,7 +436,7 @@ export default function App() {
     setNewMsg("");
   };
 
-  // ─── Block user
+  // ââ Block user
   const blockUser = async (targetId) => {
     const updated = [...(userProfile?.blockedUsers || []), targetId];
     await updateDoc(doc(db, "users", user.uid), { blockedUsers: updated });
@@ -431,7 +445,7 @@ export default function App() {
     setViewProfile(null);
   };
 
-  // ─── Report user
+  // ââ Report user
   const submitReport = async () => {
     if (!reportTarget || !reportReason) return;
     await addDoc(collection(db, "reports"), {
@@ -442,7 +456,7 @@ export default function App() {
     setTimeout(() => { setReportTarget(null); setReportSent(false); setReportReason(""); }, 2000);
   };
 
-  // ─── Cancel subscription
+  // ââ Cancel subscription
   const handleCancelSubscription = async () => {
     setCancelStatus("loading");
     try {
@@ -461,7 +475,7 @@ export default function App() {
     } catch { setCancelStatus("error"); }
   };
 
-  // ─── Feedback
+  // ââ Feedback
   const submitFeedback = async (met, seeAgain) => {
     if (!feedbackTarget) return;
     await addDoc(collection(db, "feedback"), {
@@ -471,17 +485,83 @@ export default function App() {
     setFeedbackTarget(null);
   };
 
-  // ─── Derived
+  // ââ Delete account (v4 â Step 1)
+  const deleteAccount = async () => {
+    if (deleteConfirmText !== "DELETE") return;
+    setDeletingAccount(true);
+    try {
+      // 1. Delete all matches + their messages
+      const matchSnap = await getDocs(query(collection(db, "matches"), where("users", "array-contains", user.uid)));
+      for (const m of matchSnap.docs) {
+        const msgSnap = await getDocs(collection(db, "chats", m.id, "messages"));
+        for (const msg of msgSnap.docs) await deleteDoc(doc(db, "chats", m.id, "messages", msg.id));
+        await deleteDoc(doc(db, "matches", m.id));
+      }
+      // 2. Delete likes
+      const likeSent = await getDocs(query(collection(db, "likes"), where("from", "==", user.uid)));
+      const likeRec  = await getDocs(query(collection(db, "likes"), where("to",   "==", user.uid)));
+      for (const l of [...likeSent.docs, ...likeRec.docs]) await deleteDoc(doc(db, "likes", l.id));
+      // 3. Delete compatible
+      await deleteDoc(doc(db, "compatible", user.uid)).catch(() => {});
+      // 4. Delete user profile
+      await deleteDoc(doc(db, "users", user.uid));
+      // 5. Delete Firebase Auth user
+      await deleteUser(user);
+      setUser(null); setUserProfile(null); setShowDeleteAccount(false);
+    } catch (e) {
+      if (e.code === "auth/requires-recent-login") {
+        alert("Please sign out and sign back in before deleting your account.");
+      }
+      setDeletingAccount(false);
+    }
+  };
+
+  // ââ Derived
   const isPremium  = userProfile?.plan === "pro" || userProfile?.plan === "elite";
   const isElite    = userProfile?.plan === "elite";
-  const likesLeft  = isPremium ? "∞" : Math.max(0, MAX_FREE_LIKES_DAY - likesUsed);
-  const priorityLeft = isElite ? "∞" : Math.max(0, MAX_PRIORITY_LIKES_WEEK - priorityUsed);
+  const likesLeft  = isPremium ? "â" : Math.max(0, MAX_FREE_LIKES_DAY - likesUsed);
+  const priorityLeft = isElite ? "â" : Math.max(0, MAX_PRIORITY_LIKES_WEEK - priorityUsed);
 
   const legalText = {
-    privacy: <><p>1. Data We Collect: Name, age, photos. No data from under 18. COPPA compliant.</p><p>2. Your Rights: Access, correct, delete your data. GDPR and CCPA compliant.</p><p>3. Contact: privacy@vyndlove.com</p></>,
-    terms:   <><p>1. Eligibility: Must be 18+.</p><p>2. No fake profiles, harassment, or illegal content.</p><p>3. Subscriptions auto-renew. Cancel anytime. 7-day refund.</p><p>4. Governing Law: New York, USA.</p></>,
-    cookies: <p>Essential cookies only. No advertising cookies. Analytics are anonymous.</p>,
-    safety:  <><p>Before meeting: video chat first, tell someone where you're going.</p><p>First dates: meet in public, arrange own transport.</p><p>Emergency: 911. RAINN: 1-800-656-4673. Crisis Text: HOME to 741741.</p></>,
+    privacy: (
+      <>
+        <h3 style={{ color:C.text }}>Privacy Policy</h3>
+        <p><strong>Last updated: January 2025</strong></p>
+        <p>VyndLove ("we", "our", or "us") is committed to protecting your privacy. This policy explains how we collect, use, and share your personal data.</p>
+        <p><strong>1. Data We Collect</strong><br/>Name, age, city, photos, interests, prompts, and email address. We do not collect data from anyone under 18. We are COPPA compliant.</p>
+        <p><strong>2. How We Use Your Data</strong><br/>To provide matching services, display your profile to compatible users, and improve the app experience. We do not sell your data to third parties.</p>
+        <p><strong>3. Data Retention</strong><br/>Your data is stored until you delete your account. You can delete your account at any time from Settings â Delete Account.</p>
+        <p><strong>4. Your Rights (GDPR / CCPA)</strong><br/>You have the right to access, correct, or delete your personal data. Contact us at privacy@vyndlove.com.</p>
+        <p><strong>5. Cookies</strong><br/>We use essential cookies only. No advertising or tracking cookies.</p>
+        <p><strong>6. Contact</strong><br/>privacy@vyndlove.com Â· VyndLove Inc., New York, NY</p>
+      </>
+    ),
+    terms: (
+      <>
+        <h3 style={{ color:C.text }}>Terms of Service</h3>
+        <p><strong>Last updated: January 2025</strong></p>
+        <p><strong>1. Eligibility</strong><br/>You must be 18 years of age or older to use VyndLove. By using this app you confirm you meet this requirement.</p>
+        <p><strong>2. Acceptable Use</strong><br/>No fake profiles, harassment, hate speech, nudity, illegal content, or impersonation. Violations result in immediate account termination.</p>
+        <p><strong>3. Subscriptions</strong><br/>Pro ($9.99/mo) and Elite ($24.99/mo) plans auto-renew monthly. Cancel anytime in Settings. We offer a 7-day refund on first-time purchases.</p>
+        <p><strong>4. Content</strong><br/>You retain ownership of content you upload. By posting, you grant us a license to display it to other users.</p>
+        <p><strong>5. Limitation of Liability</strong><br/>VyndLove is not responsible for user conduct. Always prioritize your personal safety.</p>
+        <p><strong>6. Governing Law</strong><br/>These terms are governed by the laws of New York, USA.</p>
+        <p><strong>7. Contact</strong><br/>{SUPPORT_EMAIL}</p>
+      </>
+    ),
+    cookies: <p>We use essential cookies only to keep you signed in. We do not use advertising, tracking, or analytics cookies. No data is shared with ad networks.</p>,
+    safety: (
+      <>
+        <h3 style={{ color:C.text }}>Safety Guide</h3>
+        <p><strong>Before meeting someone:</strong> Video chat first. Tell a friend or family member where you're going and who you're meeting.</p>
+        <p><strong>First dates:</strong> Meet in a public place. Arrange your own transport. Don't share your home address early on.</p>
+        <p><strong>Trust your instincts:</strong> If something feels off, it's okay to leave. Report any suspicious profiles using the â Report button.</p>
+        <p><strong>Emergency:</strong> 911 (US)</p>
+        <p><strong>RAINN (sexual assault support):</strong> 1-800-656-4673</p>
+        <p><strong>Crisis Text Line:</strong> Text HOME to 741741</p>
+        <p><strong>National DV Hotline:</strong> 1-800-799-7233</p>
+      </>
+    ),
   };
 
   // ============================================================
@@ -489,31 +569,51 @@ export default function App() {
   // ============================================================
   if (loading) return (
     <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center" }}>
-      <div style={{ color:C.accent, fontSize:48 }}>💜</div>
+      <div style={{ textAlign:"center" }}>
+        <div style={{ color:C.accent, fontSize:48, marginBottom:16 }}>ð</div>
+        <div style={{ color:C.muted, fontSize:14 }}>Loadingâ¦</div>
+      </div>
     </div>
   );
 
-  // ─── Age gate
-  if (!ageConfirmed) return (
-    <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", padding:24, fontFamily:"system-ui" }}>
-      <div style={{ background:C.card, borderRadius:24, padding:40, maxWidth:400, width:"100%", textAlign:"center", border:`1px solid ${C.borderMid}` }}>
-        <div style={{ fontSize:56 }}>💜</div>
-        <h2 style={{ color:C.text, margin:"12px 0 8px" }}>Welcome to VyndLove</h2>
-        <p style={{ color:C.muted, marginBottom:24 }}>You must be 18 or older to use this app.</p>
-        <div style={{ display:"flex", gap:12 }}>
-          <button onClick={() => setAgeConfirmed(true)} style={{ flex:1, background:C.accent, color:"#fff", border:"none", borderRadius:12, padding:"13px 0", cursor:"pointer", fontWeight:700, fontSize:15 }}>I am 18+ ✓</button>
-          <button onClick={() => alert("You must be 18+ to use this app.")} style={{ flex:1, background:"transparent", color:C.muted, border:`1px solid ${C.border}`, borderRadius:12, padding:"13px 0", cursor:"pointer" }}>Under 18</button>
+  // ââ Pre-login legal overlay
+  if (showPreLoginLegal) return (
+    <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"system-ui", padding:24 }}>
+      <div style={{ maxWidth:600, margin:"0 auto" }}>
+        <button onClick={() => setShowPreLoginLegal(null)}
+          style={{ background:"none", border:"none", color:C.accent, fontSize:15, cursor:"pointer", marginBottom:16 }}>â Back</button>
+        <div style={{ background:C.card, borderRadius:20, padding:28, border:`1px solid ${C.borderMid}`, color:C.muted, lineHeight:1.8, fontSize:14 }}>
+          {legalText[showPreLoginLegal]}
         </div>
       </div>
     </div>
   );
 
-  // ─── Auth screen
+  // ââ Age gate
+  if (!ageConfirmed) return (
+    <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", padding:24, fontFamily:"system-ui" }}>
+      <div style={{ background:C.card, borderRadius:24, padding:40, maxWidth:400, width:"100%", textAlign:"center", border:`1px solid ${C.borderMid}` }}>
+        <div style={{ fontSize:56 }}>ð</div>
+        <h2 style={{ color:C.text, margin:"12px 0 8px" }}>Welcome to VyndLove</h2>
+        <p style={{ color:C.muted, marginBottom:24 }}>You must be 18 or older to use this app.</p>
+        <div style={{ display:"flex", gap:12 }}>
+          <button onClick={() => setAgeConfirmed(true)} style={{ flex:1, background:C.accent, color:"#fff", border:"none", borderRadius:12, padding:"13px 0", cursor:"pointer", fontWeight:700, fontSize:15 }}>I am 18+ â</button>
+          <button onClick={() => alert("You must be 18+ to use this app.")} style={{ flex:1, background:"transparent", color:C.muted, border:`1px solid ${C.border}`, borderRadius:12, padding:"13px 0", cursor:"pointer" }}>Under 18</button>
+        </div>
+        <div style={{ marginTop:20, display:"flex", gap:12, justifyContent:"center" }}>
+          <button onClick={() => setShowPreLoginLegal("privacy")} style={{ background:"none", border:"none", color:C.accent, fontSize:12, cursor:"pointer", textDecoration:"underline" }}>Privacy Policy</button>
+          <button onClick={() => setShowPreLoginLegal("terms")}   style={{ background:"none", border:"none", color:C.accent, fontSize:12, cursor:"pointer", textDecoration:"underline" }}>Terms of Service</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ââ Auth screen
   if (!user) return (
     <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", padding:24, fontFamily:"system-ui" }}>
       <div style={{ background:C.card, borderRadius:24, padding:40, maxWidth:400, width:"100%", border:`1px solid ${C.borderMid}` }}>
         <div style={{ textAlign:"center", marginBottom:24 }}>
-          <div style={{ fontSize:48 }}>💜</div>
+          <div style={{ fontSize:48 }}>ð</div>
           <h2 style={{ color:C.text, margin:"8px 0 4px" }}>VyndLove</h2>
           <p style={{ color:C.muted, margin:0 }}>Find someone worth knowing</p>
         </div>
@@ -534,17 +634,28 @@ export default function App() {
         <button onClick={handleAuth} style={{ width:"100%", background:C.accent, color:"#fff", border:"none", borderRadius:12, padding:"13px 0", cursor:"pointer", fontWeight:700, fontSize:16, marginTop:16 }}>
           {authMode === "login" ? "Log In" : "Create Account"}
         </button>
+        {authMode === "signup" && (
+          <p style={{ color:C.muted, fontSize:11, textAlign:"center", marginTop:14, marginBottom:0, lineHeight:1.6 }}>
+            By creating an account you agree to our{" "}
+            <button onClick={() => setShowPreLoginLegal("terms")} style={{ background:"none", border:"none", color:C.accent, fontSize:11, cursor:"pointer", padding:0, textDecoration:"underline" }}>Terms</button>
+            {" "}and{" "}
+            <button onClick={() => setShowPreLoginLegal("privacy")} style={{ background:"none", border:"none", color:C.accent, fontSize:11, cursor:"pointer", padding:0, textDecoration:"underline" }}>Privacy Policy</button>.
+          </p>
+        )}
+        <div style={{ marginTop:16, display:"flex", gap:16, justifyContent:"center" }}>
+          <button onClick={() => setShowPreLoginLegal("privacy")} style={{ background:"none", border:"none", color:C.muted, fontSize:12, cursor:"pointer" }}>Privacy Policy</button>
+          <button onClick={() => setShowPreLoginLegal("terms")}   style={{ background:"none", border:"none", color:C.muted, fontSize:12, cursor:"pointer" }}>Terms of Service</button>
+        </div>
       </div>
     </div>
   );
 
-  // ─── Profile setup wizard
+  // ââ Profile setup wizard
   if (setupMode) {
     const validPhotos = setupPhotos.filter(Boolean);
     const photosOk    = validPhotos.length >= MIN_PHOTOS;
     const canFinish   = setupName && setupAge && setupCity && setupGender && setupPrompts.every(p => p.a.trim()) && photosOk;
 
-    // Photo reorder helpers
     const movePhoto = (idx, dir) => {
       const p = [...setupPhotos];
       const target = idx + dir;
@@ -557,7 +668,7 @@ export default function App() {
       <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"system-ui", padding:24 }}>
         <div style={{ maxWidth:520, margin:"0 auto" }}>
           <div style={{ textAlign:"center", padding:"28px 0 20px" }}>
-            <div style={{ fontSize:40 }}>💜</div>
+            <div style={{ fontSize:40 }}>ð</div>
             <h2 style={{ color:C.text, margin:"8px 0 4px" }}>Build Your Profile</h2>
             <div style={{ display:"flex", gap:6, justifyContent:"center", marginTop:12 }}>
               {[0,1,2].map(i => (
@@ -566,7 +677,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Step 0: basics */}
           {step === 0 && (
             <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
               <p style={{ color:C.muted, fontSize:13, margin:"0 0 4px" }}>Basic info</p>
@@ -606,27 +716,26 @@ export default function App() {
               <button onClick={() => { if (setupName && setupAge && setupCity && setupGender) setStep(1); }}
                 disabled={!setupName||!setupAge||!setupCity||!setupGender}
                 style={{ background: (!setupName||!setupAge||!setupCity||!setupGender) ? C.muted : C.accent, color:"#fff", border:"none", borderRadius:12, padding:"13px 0", cursor:"pointer", fontWeight:700, fontSize:15, marginTop:4 }}>
-                Next →
+                Next â
               </button>
             </div>
           )}
 
-          {/* Step 1: photos — minimum 4 required, drag/reorder with arrows */}
           {step === 1 && (
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                 <p style={{ color:C.muted, fontSize:13, margin:0 }}>Photos ({validPhotos.length}/{MIN_PHOTOS} required)</p>
                 {photosOk
-                  ? <span style={{ color:C.green, fontSize:12, fontWeight:700 }}>✓ Ready</span>
+                  ? <span style={{ color:C.green, fontSize:12, fontWeight:700 }}>â Ready</span>
                   : <span style={{ color:C.red, fontSize:12 }}>{MIN_PHOTOS - validPhotos.length} more needed</span>}
               </div>
               {setupPhotos.map((url, i) => (
                 <div key={i} style={{ display:"flex", gap:8, alignItems:"center" }}>
                   <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
                     <button onClick={() => movePhoto(i, -1)} disabled={i===0}
-                      style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:4, width:24, height:22, cursor:"pointer", color:C.muted, fontSize:11, display:"flex", alignItems:"center", justifyContent:"center" }}>▲</button>
+                      style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:4, width:24, height:22, cursor:"pointer", color:C.muted, fontSize:11, display:"flex", alignItems:"center", justifyContent:"center" }}>â²</button>
                     <button onClick={() => movePhoto(i, 1)} disabled={i===setupPhotos.length-1}
-                      style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:4, width:24, height:22, cursor:"pointer", color:C.muted, fontSize:11, display:"flex", alignItems:"center", justifyContent:"center" }}>▼</button>
+                      style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:4, width:24, height:22, cursor:"pointer", color:C.muted, fontSize:11, display:"flex", alignItems:"center", justifyContent:"center" }}>â¼</button>
                   </div>
                   <div style={{ flex:1, position:"relative" }}>
                     <input value={url} onChange={e => { const p=[...setupPhotos]; p[i]=e.target.value; setSetupPhotos(p); }}
@@ -640,22 +749,21 @@ export default function App() {
               ))}
               {!photosOk && (
                 <div style={{ background:"#ef444412", borderRadius:10, padding:"10px 14px", border:`1px solid ${C.red}30` }}>
-                  <p style={{ color:C.red, fontSize:13, margin:0 }}>⚠️ You need at least {MIN_PHOTOS} photos to proceed. Profiles with more photos get 3× more matches.</p>
+                  <p style={{ color:C.red, fontSize:13, margin:0 }}>â ï¸ You need at least {MIN_PHOTOS} photos to proceed. Profiles with more photos get 3Ã more matches.</p>
                 </div>
               )}
               <div style={{ display:"flex", gap:10, marginTop:4 }}>
-                <button onClick={() => setStep(0)} style={{ flex:1, background:"transparent", color:C.muted, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 0", cursor:"pointer" }}>← Back</button>
+                <button onClick={() => setStep(0)} style={{ flex:1, background:"transparent", color:C.muted, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 0", cursor:"pointer" }}>â Back</button>
                 <button onClick={() => { if (photosOk) setStep(2); }}
                   disabled={!photosOk}
-                  style={{ flex:2, background: photosOk ? C.accent : C.muted, color:"#fff", border:"none", borderRadius:12, padding:"12px 0", cursor: photosOk ? "pointer" : "not-allowed", fontWeight:700 }}>Next →</button>
+                  style={{ flex:2, background: photosOk ? C.accent : C.muted, color:"#fff", border:"none", borderRadius:12, padding:"12px 0", cursor: photosOk ? "pointer" : "not-allowed", fontWeight:700 }}>Next â</button>
               </div>
             </div>
           )}
 
-          {/* Step 2: prompts */}
           {step === 2 && (
             <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-              <p style={{ color:C.muted, fontSize:13, margin:"0 0 4px" }}>Answer 3 prompts (required) — this is how people get to know you</p>
+              <p style={{ color:C.muted, fontSize:13, margin:"0 0 4px" }}>Answer 3 prompts (required) â this is how people get to know you</p>
               {setupPrompts.map((pr, i) => (
                 <div key={i} style={{ background:C.surface, borderRadius:12, padding:16, border:`1px solid ${C.borderMid}` }}>
                   <select value={pr.q} onChange={e => { const p=[...setupPrompts]; p[i]={...p[i],q:e.target.value}; setSetupPrompts(p); }}
@@ -668,10 +776,10 @@ export default function App() {
                 </div>
               ))}
               <div style={{ display:"flex", gap:10 }}>
-                <button onClick={() => setStep(1)} style={{ flex:1, background:"transparent", color:C.muted, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 0", cursor:"pointer" }}>← Back</button>
+                <button onClick={() => setStep(1)} style={{ flex:1, background:"transparent", color:C.muted, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 0", cursor:"pointer" }}>â Back</button>
                 <button onClick={saveProfile} disabled={!canFinish}
                   style={{ flex:2, background:canFinish ? C.accent : C.muted, color:"#fff", border:"none", borderRadius:12, padding:"12px 0", cursor: canFinish ? "pointer" : "not-allowed", fontWeight:700 }}>
-                  Start Matching 💜
+                  Start Matching ð
                 </button>
               </div>
             </div>
@@ -690,20 +798,20 @@ export default function App() {
     return (
       <div style={{ position:"fixed", inset:0, background:C.bg, zIndex:200, overflowY:"auto", fontFamily:"system-ui" }}>
         <div style={{ position:"sticky", top:0, background:C.surface, borderBottom:`1px solid ${C.border}`, padding:"12px 16px", display:"flex", alignItems:"center", gap:12, zIndex:10 }}>
-          <button onClick={onClose} style={{ background:"none", border:"none", color:C.muted, fontSize:22, cursor:"pointer", lineHeight:1 }}>←</button>
+          <button onClick={onClose} style={{ background:"none", border:"none", color:C.muted, fontSize:22, cursor:"pointer", lineHeight:1 }}>â</button>
           <div style={{ flex:1 }}>
             <span style={{ fontWeight:700, color:C.text }}>{profile.name}, {profile.age}</span>
-            {profile.verified && <span style={{ marginLeft:6, background:C.purpleDim, color:C.purple, borderRadius:20, padding:"2px 8px", fontSize:11, fontWeight:700 }}>✓ Verified</span>}
+            {profile.verified && <span style={{ marginLeft:6, background:C.purpleDim, color:C.purple, borderRadius:20, padding:"2px 8px", fontSize:11, fontWeight:700 }}>â Verified</span>}
           </div>
           <button onClick={() => setReportTarget(profile)}
-            style={{ background:"transparent", color:C.muted, border:"none", fontSize:13, cursor:"pointer", padding:"4px 8px" }}>⚑ Report</button>
+            style={{ background:"transparent", color:C.muted, border:"none", fontSize:13, cursor:"pointer", padding:"4px 8px" }}>â Report</button>
           <button onClick={() => { if (window.confirm(`Block ${profile.name}?`)) blockUser(profile.id); }}
             style={{ background:"transparent", color:C.red, border:`1px solid ${C.red}40`, borderRadius:8, fontSize:12, cursor:"pointer", padding:"4px 10px" }}>Block</button>
         </div>
 
         <div style={{ maxWidth:600, margin:"0 auto", padding:"0 0 120px" }}>
           {photos.length === 0 && (
-            <div style={{ height:260, background:`linear-gradient(135deg,${C.accent}22,${C.purple}10)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:80 }}>💜</div>
+            <div style={{ height:260, background:`linear-gradient(135deg,${C.accent}22,${C.purple}10)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:80 }}>ð</div>
           )}
           {photos.map((url, i) => (
             <div key={i} style={{ position:"relative", marginBottom:4 }}>
@@ -711,7 +819,7 @@ export default function App() {
                 onError={e => { e.target.style.display="none"; }} />
               <button onClick={() => { setLikeTarget({ profileId:profile.id, itemType:"photo", itemIndex:i }); setLikeComment(""); setLikeError(""); }}
                 style={{ position:"absolute", bottom:14, right:14, background:"rgba(0,0,0,0.72)", border:`2px solid ${C.accent}`, borderRadius:"50%", width:50, height:50, cursor:"pointer", fontSize:22, display:"flex", alignItems:"center", justifyContent:"center", backdropFilter:"blur(4px)" }}>
-                🤍
+                ð¤
               </button>
             </div>
           ))}
@@ -719,9 +827,9 @@ export default function App() {
           <div style={{ padding:"20px 16px 0" }}>
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
               <h2 style={{ margin:0, fontSize:26, color:C.text }}>{profile.name}, {profile.age}</h2>
-              {profile.verified && <span style={{ background:C.purpleDim, color:C.purple, borderRadius:20, padding:"3px 10px", fontSize:12, fontWeight:700 }}>✓ Verified</span>}
+              {profile.verified && <span style={{ background:C.purpleDim, color:C.purple, borderRadius:20, padding:"3px 10px", fontSize:12, fontWeight:700 }}>â Verified</span>}
             </div>
-            <p style={{ margin:"0 0 4px", color:C.muted, fontSize:14 }}>📍 {profile.city}</p>
+            <p style={{ margin:"0 0 4px", color:C.muted, fontSize:14 }}>ð {profile.city}</p>
             {profile.lastActive && <p style={{ margin:"0 0 12px", color:C.muted, fontSize:12 }}>Active {timeAgo(profile.lastActive)}</p>}
             {profile.bio && <p style={{ margin:"0 0 16px", color:"#ccc", lineHeight:1.7, fontSize:15 }}>{profile.bio}</p>}
             {(profile.interests||[]).length > 0 && (
@@ -739,7 +847,7 @@ export default function App() {
               <p style={{ color:C.text, fontSize:15, lineHeight:1.7, margin:0, paddingRight:52 }}>{pr.a}</p>
               <button onClick={() => { setLikeTarget({ profileId:profile.id, itemType:"prompt", itemIndex:i }); setLikeComment(""); setLikeError(""); }}
                 style={{ position:"absolute", bottom:14, right:14, background:"transparent", border:`2px solid ${C.accent}`, borderRadius:"50%", width:44, height:44, cursor:"pointer", fontSize:20, display:"flex", alignItems:"center", justifyContent:"center" }}>
-                🤍
+                ð¤
               </button>
             </div>
           ) : null)}
@@ -747,7 +855,7 @@ export default function App() {
           <div style={{ margin:"16px 16px 0" }}>
             <button onClick={() => { setLikeTarget({ profileId:profile.id, itemType:"profile", itemIndex:0, isPriority:true }); setLikeComment(""); setLikeError(""); }}
               style={{ width:"100%", background:C.goldDim, color:C.gold, border:`1px solid ${C.gold}`, borderRadius:12, padding:"13px 0", cursor:"pointer", fontWeight:700, fontSize:15 }}>
-              ⭐ Priority Like — Move to top of their queue ({priorityLeft} left this week)
+              â­ Priority Like â Move to top of their queue ({priorityLeft} left this week)
             </button>
           </div>
         </div>
@@ -764,24 +872,24 @@ export default function App() {
     return (
       <div onClick={() => setViewProfile(profile)}
         style={{ background:C.card, borderRadius:20, overflow:"hidden", border:`1px solid ${isCompatible ? C.accent : isStandout ? C.gold : C.border}`, cursor:"pointer", marginBottom:12, position:"relative" }}>
-        {isCompatible && <div style={{ position:"absolute", top:12, left:12, zIndex:2, background:C.accent, color:"#fff", borderRadius:20, padding:"4px 12px", fontSize:11, fontWeight:700 }}>💜 Most Compatible</div>}
-        {isStandout  && <div style={{ position:"absolute", top:12, left:12, zIndex:2, background:C.gold, color:"#000", borderRadius:20, padding:"4px 12px", fontSize:11, fontWeight:700 }}>⭐ Standout</div>}
-        {profile.verified && <div style={{ position:"absolute", top:12, right:12, zIndex:2, background:C.purpleDim, color:C.purple, borderRadius:20, padding:"3px 9px", fontSize:10, fontWeight:700 }}>✓ Verified</div>}
+        {isCompatible && <div style={{ position:"absolute", top:12, left:12, zIndex:2, background:C.accent, color:"#fff", borderRadius:20, padding:"4px 12px", fontSize:11, fontWeight:700 }}>ð Most Compatible</div>}
+        {isStandout  && <div style={{ position:"absolute", top:12, left:12, zIndex:2, background:C.gold, color:"#000", borderRadius:20, padding:"4px 12px", fontSize:11, fontWeight:700 }}>â­ Standout</div>}
+        {profile.verified && <div style={{ position:"absolute", top:12, right:12, zIndex:2, background:C.purpleDim, color:C.purple, borderRadius:20, padding:"3px 9px", fontSize:10, fontWeight:700 }}>â Verified</div>}
         {photo
           ? <img src={photo} alt={profile.name} style={{ width:"100%", height:280, objectFit:"cover", display:"block" }}
               onError={e => { e.target.style.display="none"; }} />
-          : <div style={{ height:200, background:`linear-gradient(135deg,${C.accent}22,${C.purple}10)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:60 }}>💜</div>
+          : <div style={{ height:200, background:`linear-gradient(135deg,${C.accent}22,${C.purple}10)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:60 }}>ð</div>
         }
         <div style={{ padding:"14px 16px" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
             <div>
               <div style={{ fontWeight:700, fontSize:17, color:C.text }}>{profile.name}, {profile.age}</div>
-              <div style={{ color:C.muted, fontSize:13, marginTop:2 }}>📍 {profile.city}</div>
+              <div style={{ color:C.muted, fontSize:13, marginTop:2 }}>ð {profile.city}</div>
               {profile.lastActive && <div style={{ color:C.muted, fontSize:11, marginTop:2 }}>Active {timeAgo(profile.lastActive)}</div>}
             </div>
             <button onClick={e => { e.stopPropagation(); setLikeTarget({ profileId:profile.id, itemType:"photo", itemIndex:0 }); setLikeComment(""); setLikeError(""); }}
               style={{ background:C.accentDim, border:`1px solid ${C.accent}`, borderRadius:"50%", width:44, height:44, cursor:"pointer", fontSize:20, flexShrink:0 }}>
-              🤍
+              ð¤
             </button>
           </div>
           {firstPrompt && (
@@ -790,7 +898,7 @@ export default function App() {
               <div style={{ color:"#ccc", fontSize:13, lineHeight:1.6 }}>{firstPrompt.a}</div>
             </div>
           )}
-          <div style={{ color:C.muted, fontSize:12, marginTop:10 }}>Tap to see full profile →</div>
+          <div style={{ color:C.muted, fontSize:12, marginTop:10 }}>Tap to see full profile â</div>
         </div>
       </div>
     );
@@ -806,12 +914,21 @@ export default function App() {
   return (
     <div style={{ minHeight:"100vh", background:C.bg, color:C.text, fontFamily:"system-ui" }}>
 
-      {/* ─── Like modal */}
+      {/* ââ Global error banner */}
+      {loadError && (
+        <div style={{ background:"#ef444418", borderBottom:`1px solid ${C.red}40`, padding:"10px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <span style={{ color:C.red, fontSize:13 }}>â ï¸ {loadError}</span>
+          <button onClick={() => { setLoadError(null); window.location.reload(); }}
+            style={{ background:C.red, color:"#fff", border:"none", borderRadius:6, padding:"4px 12px", cursor:"pointer", fontSize:12, fontWeight:700 }}>Retry</button>
+        </div>
+      )}
+
+      {/* ââ Like modal */}
       {likeTarget && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.88)", zIndex:500, display:"flex", alignItems:"flex-end", justifyContent:"center" }}>
           <div style={{ background:C.card, borderRadius:"24px 24px 0 0", padding:28, width:"100%", maxWidth:520, border:`1px solid ${C.borderMid}` }}>
             <h3 style={{ margin:"0 0 6px", color:C.text }}>
-              {likeTarget.isPriority ? "⭐ Priority Like" : likeTarget.itemType === "prompt" ? "💜 Like their answer" : "💜 Like this photo"}
+              {likeTarget.isPriority ? "â­ Priority Like" : likeTarget.itemType === "prompt" ? "ð Like their answer" : "ð Like this photo"}
             </h3>
             <p style={{ color:C.muted, fontSize:13, margin:"0 0 14px" }}>Add a comment to stand out (optional)</p>
             <textarea value={likeComment}
@@ -825,18 +942,18 @@ export default function App() {
                 style={{ flex:1, background:"transparent", color:C.muted, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 0", cursor:"pointer" }}>Cancel</button>
               <button onClick={() => sendLike(likeTarget.isPriority)} disabled={likeSending}
                 style={{ flex:2, background: likeTarget.isPriority ? C.gold : C.accent, color: likeTarget.isPriority ? "#000" : "#fff", border:"none", borderRadius:12, padding:"12px 0", cursor:"pointer", fontWeight:700, fontSize:15 }}>
-                {likeSending ? "Sending…" : likeTarget.isPriority ? "⭐ Send Priority Like" : "Send 💜"}
+                {likeSending ? "Sendingâ¦" : likeTarget.isPriority ? "â­ Send Priority Like" : "Send ð"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ─── Match popup */}
+      {/* ââ Match popup */}
       {matchPopup && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.88)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
           <div style={{ background:C.card, borderRadius:24, padding:40, maxWidth:340, width:"100%", textAlign:"center", border:`2px solid ${C.accent}` }}>
-            <div style={{ fontSize:56 }}>💜</div>
+            <div style={{ fontSize:56 }}>ð</div>
             <h2 style={{ color:C.accent, margin:"10px 0 6px" }}>It's a Match!</h2>
             <p style={{ color:C.muted }}>You and {matchPopup.name} liked each other!</p>
             <div style={{ display:"flex", gap:10, marginTop:20 }}>
@@ -849,21 +966,31 @@ export default function App() {
         </div>
       )}
 
-      {/* ─── Paywall */}
+      {/* ââ Paywall */}
       {showPaywall && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.92)", zIndex:550, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
           <div style={{ background:C.card, borderRadius:24, padding:36, maxWidth:380, width:"100%", textAlign:"center", border:`2px solid ${C.accent}` }}>
-            <div style={{ fontSize:48 }}>💜</div>
+            <div style={{ fontSize:48 }}>ð</div>
             <h2 style={{ color:C.text, margin:"12px 0 8px" }}>You've used all your free likes!</h2>
             <p style={{ color:C.muted, marginBottom:24 }}>Upgrade to keep connecting with people who interest you.</p>
-            <button onClick={() => { window.open(STRIPE_LINKS.pro, "_blank"); setShowPaywall(false); }}
-              style={{ width:"100%", background:C.accent, color:"#fff", border:"none", borderRadius:12, padding:"13px 0", cursor:"pointer", fontWeight:700, fontSize:15, marginBottom:10 }}>
-              Get Pro — $9.99/mo
-            </button>
-            <button onClick={() => { window.open(STRIPE_LINKS.elite, "_blank"); setShowPaywall(false); }}
-              style={{ width:"100%", background:"transparent", color:C.elite, border:`2px solid ${C.elite}`, borderRadius:12, padding:"11px 0", cursor:"pointer", fontWeight:700, marginBottom:20 }}>
-              Get Elite — $24.99/mo ⭐
-            </button>
+            {!IS_MOBILE_BUILD && (
+              <>
+                <button onClick={() => { window.open(STRIPE_LINKS.pro, "_blank"); setShowPaywall(false); }}
+                  style={{ width:"100%", background:C.accent, color:"#fff", border:"none", borderRadius:12, padding:"13px 0", cursor:"pointer", fontWeight:700, fontSize:15, marginBottom:10 }}>
+                  Get Pro â $9.99/mo
+                </button>
+                <button onClick={() => { window.open(STRIPE_LINKS.elite, "_blank"); setShowPaywall(false); }}
+                  style={{ width:"100%", background:"transparent", color:C.elite, border:`2px solid ${C.elite}`, borderRadius:12, padding:"11px 0", cursor:"pointer", fontWeight:700, marginBottom:20 }}>
+                  Get Elite â $24.99/mo â­
+                </button>
+              </>
+            )}
+            {IS_MOBILE_BUILD && (
+              <button onClick={() => { setShowPaywall(false); setPage("Pricing"); }}
+                style={{ width:"100%", background:C.accent, color:"#fff", border:"none", borderRadius:12, padding:"13px 0", cursor:"pointer", fontWeight:700, fontSize:15, marginBottom:20 }}>
+                View Plans
+              </button>
+            )}
             <button onClick={() => setShowPaywall(false)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:13 }}>
               Come back tomorrow (free)
             </button>
@@ -871,19 +998,19 @@ export default function App() {
         </div>
       )}
 
-      {/* ─── Report modal */}
+      {/* ââ Report modal */}
       {reportTarget && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.88)", zIndex:700, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
           <div style={{ background:C.card, borderRadius:20, padding:28, maxWidth:400, width:"100%" }}>
             {reportSent ? (
               <div style={{ textAlign:"center", padding:"20px 0" }}>
-                <div style={{ fontSize:40 }}>✅</div>
+                <div style={{ fontSize:40 }}>â</div>
                 <p style={{ color:C.green, fontWeight:700, marginTop:12 }}>Report submitted. Thank you.</p>
               </div>
             ) : (
               <>
                 <h3 style={{ color:C.text, margin:"0 0 16px" }}>Report {reportTarget.name}</h3>
-                {["Fake profile","Inappropriate content","Harassment","Spam","Under 18","Other"].map(r => (
+                {["Fake profile","Inappropriate content","Harassment","Spam","Under 18","Sexual content","Other"].map(r => (
                   <button key={r} onClick={() => setReportReason(r)}
                     style={{ display:"block", width:"100%", textAlign:"left", background: reportReason===r ? C.accentDim : "transparent", color: reportReason===r ? C.accent : C.muted, border:`1px solid ${reportReason===r ? C.accent : C.border}`, borderRadius:10, padding:"10px 14px", cursor:"pointer", marginBottom:8, fontSize:14 }}>
                     {r}
@@ -901,14 +1028,14 @@ export default function App() {
         </div>
       )}
 
-      {/* ─── Feedback modal */}
+      {/* ââ Feedback modal */}
       {feedbackTarget && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.88)", zIndex:650, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
           <div style={{ background:C.card, borderRadius:20, padding:28, maxWidth:360, width:"100%", textAlign:"center" }}>
-            <div style={{ fontSize:40, marginBottom:12 }}>💬</div>
+            <div style={{ fontSize:40, marginBottom:12 }}>ð¬</div>
             <h3 style={{ color:C.text, margin:"0 0 8px" }}>Did you meet up?</h3>
             <div style={{ display:"flex", gap:10, marginBottom:16 }}>
-              <button onClick={() => submitFeedback(true, null)} style={{ flex:1, background:C.greenDim, color:C.green, border:`1px solid ${C.green}`, borderRadius:12, padding:"11px 0", cursor:"pointer", fontWeight:700 }}>Yes! 🎉</button>
+              <button onClick={() => submitFeedback(true, null)} style={{ flex:1, background:C.greenDim, color:C.green, border:`1px solid ${C.green}`, borderRadius:12, padding:"11px 0", cursor:"pointer", fontWeight:700 }}>Yes! ð</button>
               <button onClick={() => submitFeedback(false, null)} style={{ flex:1, background:"transparent", color:C.muted, border:`1px solid ${C.border}`, borderRadius:12, padding:"11px 0", cursor:"pointer" }}>Not yet</button>
             </div>
             <button onClick={() => setFeedbackTarget(null)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:13 }}>Skip</button>
@@ -916,13 +1043,13 @@ export default function App() {
         </div>
       )}
 
-      {/* ─── Legal modal */}
+      {/* ââ Legal modal */}
       {legal && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:400, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
           <div style={{ background:C.card, borderRadius:20, padding:32, maxWidth:560, width:"100%", border:`1px solid ${C.borderMid}`, maxHeight:"80vh", overflowY:"auto" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
               <h2 style={{ margin:0, color:C.text }}>{{ privacy:"Privacy Policy", terms:"Terms of Service", cookies:"Cookie Policy", safety:"Safety Guide" }[legal]}</h2>
-              <button onClick={() => setLegal(null)} style={{ background:"none", border:"none", color:C.muted, fontSize:22, cursor:"pointer" }}>✕</button>
+              <button onClick={() => setLegal(null)} style={{ background:"none", border:"none", color:C.muted, fontSize:22, cursor:"pointer" }}>â</button>
             </div>
             <div style={{ color:C.muted, lineHeight:1.8, fontSize:14 }}>{legalText[legal]}</div>
             <button onClick={() => setLegal(null)} style={{ marginTop:20, background:C.accent, color:"#fff", border:"none", borderRadius:10, padding:"11px 24px", cursor:"pointer", fontWeight:700 }}>Close</button>
@@ -930,13 +1057,13 @@ export default function App() {
         </div>
       )}
 
-      {/* ─── Cancel modal */}
+      {/* ââ Cancel modal */}
       {showCancelModal && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.88)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
           <div style={{ background:C.card, borderRadius:24, padding:36, maxWidth:400, width:"100%", textAlign:"center", border:`1px solid #ef444440` }}>
             {cancelStatus === "done" ? (
               <>
-                <div style={{ fontSize:48, marginBottom:12 }}>✓</div>
+                <div style={{ fontSize:48, marginBottom:12 }}>â</div>
                 <h2 style={{ color:C.green, margin:"0 0 10px" }}>Cancellation Confirmed</h2>
                 <p style={{ color:C.muted, marginBottom:24 }}>Your subscription ends on <strong style={{ color:C.text }}>{cancelDate}</strong>.</p>
                 <button onClick={() => setShowCancelModal(false)} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:12, padding:"12px 32px", cursor:"pointer", fontWeight:700 }}>Got it</button>
@@ -944,6 +1071,7 @@ export default function App() {
             ) : cancelStatus === "error" ? (
               <>
                 <h2 style={{ color:C.red, margin:"0 0 10px" }}>Something went wrong</h2>
+                <p style={{ color:C.muted, marginBottom:20 }}>Please try again or contact {SUPPORT_EMAIL}</p>
                 <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
                   <button onClick={() => setShowCancelModal(false)} style={{ background:"transparent", color:C.muted, border:`1px solid ${C.border}`, borderRadius:12, padding:"11px 24px", cursor:"pointer" }}>Close</button>
                   <button onClick={handleCancelSubscription} style={{ background:C.red, color:"#fff", border:"none", borderRadius:12, padding:"11px 24px", cursor:"pointer", fontWeight:700 }}>Try Again</button>
@@ -951,14 +1079,14 @@ export default function App() {
               </>
             ) : (
               <>
-                <div style={{ fontSize:48, marginBottom:12 }}>😢</div>
+                <div style={{ fontSize:48, marginBottom:12 }}>ð¢</div>
                 <h2 style={{ color:C.text, margin:"0 0 8px" }}>Cancel your {userProfile?.plan?.toUpperCase()} subscription?</h2>
                 <p style={{ color:C.muted, marginBottom:24 }}>You'll keep access until the end of your billing period.</p>
                 <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                   <button onClick={() => setShowCancelModal(false)} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:12, padding:"13px 0", cursor:"pointer", fontWeight:700, fontSize:15 }}>Keep My Subscription</button>
                   <button onClick={handleCancelSubscription} disabled={cancelStatus==="loading"}
                     style={{ background:"transparent", color:C.red, border:`1px solid #ef444455`, borderRadius:12, padding:"11px 0", cursor:"pointer", fontWeight:600 }}>
-                    {cancelStatus==="loading" ? "Cancelling…" : "Yes, Cancel"}
+                    {cancelStatus==="loading" ? "Cancellingâ¦" : "Yes, Cancel"}
                   </button>
                 </div>
               </>
@@ -967,12 +1095,89 @@ export default function App() {
         </div>
       )}
 
-      {/* ─── Full Profile overlay */}
+      {/* ââ Delete Account modal (v4 Step 1) */}
+      {showDeleteAccount && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.92)", zIndex:800, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+          <div style={{ background:C.card, borderRadius:24, padding:32, maxWidth:400, width:"100%", border:`2px solid ${C.red}` }}>
+            <div style={{ fontSize:40, textAlign:"center", marginBottom:12 }}>â ï¸</div>
+            <h2 style={{ color:C.red, margin:"0 0 10px", textAlign:"center" }}>Delete Your Account</h2>
+            <p style={{ color:C.muted, fontSize:14, lineHeight:1.7, marginBottom:16 }}>
+              This will permanently delete your profile, all matches, messages, and likes. <strong style={{ color:C.text }}>This cannot be undone.</strong>
+            </p>
+            <div style={{ background:"#ef444412", borderRadius:10, padding:"10px 14px", marginBottom:16, border:`1px solid ${C.red}30` }}>
+              <p style={{ color:C.red, fontSize:13, margin:0 }}>Type <strong>DELETE</strong> below to confirm:</p>
+            </div>
+            <input
+              value={deleteConfirmText}
+              onChange={e => setDeleteConfirmText(e.target.value)}
+              placeholder="Type DELETE here"
+              style={{ ...inp(), borderColor: deleteConfirmText === "DELETE" ? C.red : C.borderMid, marginBottom:16 }}
+            />
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={() => { setShowDeleteAccount(false); setDeleteConfirmText(""); }}
+                style={{ flex:1, background:"transparent", color:C.muted, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 0", cursor:"pointer" }}>
+                Cancel
+              </button>
+              <button
+                onClick={deleteAccount}
+                disabled={deleteConfirmText !== "DELETE" || deletingAccount}
+                style={{ flex:1, background: deleteConfirmText === "DELETE" ? C.red : C.muted, color:"#fff", border:"none", borderRadius:12, padding:"12px 0", cursor: deleteConfirmText === "DELETE" ? "pointer" : "not-allowed", fontWeight:700 }}>
+                {deletingAccount ? "Deletingâ¦" : "Delete Forever"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ââ Contact & Support modal (v4 Step 8) */}
+      {showContact && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.88)", zIndex:750, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+          <div style={{ background:C.card, borderRadius:24, padding:32, maxWidth:400, width:"100%", border:`1px solid ${C.borderMid}` }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+              <h2 style={{ margin:0, color:C.text }}>Contact & Support</h2>
+              <button onClick={() => setShowContact(false)} style={{ background:"none", border:"none", color:C.muted, fontSize:22, cursor:"pointer" }}>â</button>
+            </div>
+            <div style={{ background:C.surface, borderRadius:12, padding:16, marginBottom:16 }}>
+              <p style={{ color:C.muted, fontSize:13, margin:"0 0 8px" }}>Email us at:</p>
+              <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color:C.accent, fontWeight:700, fontSize:16, textDecoration:"none" }}>{SUPPORT_EMAIL}</a>
+            </div>
+            <div style={{ color:C.muted, fontSize:13, lineHeight:1.8 }}>
+              <p style={{ margin:"0 0 8px" }}>We typically respond within 24â48 hours.</p>
+              <p style={{ margin:"0 0 8px" }}>For account issues, subscription questions, or to report a safety concern, please include:</p>
+              <p style={{ margin:"0 0 4px" }}>â¢ Your registered email address</p>
+              <p style={{ margin:"0 0 4px" }}>â¢ A brief description of the issue</p>
+              <p style={{ margin:0 }}>â¢ Any relevant screenshots</p>
+            </div>
+            <button onClick={() => setShowContact(false)} style={{ width:"100%", background:C.accent, color:"#fff", border:"none", borderRadius:12, padding:"12px 0", cursor:"pointer", fontWeight:700, marginTop:20 }}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* ââ Profanity warning modal (v4 Step 4) */}
+      {profanityWarning && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.88)", zIndex:900, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+          <div style={{ background:C.card, borderRadius:20, padding:28, maxWidth:360, width:"100%", textAlign:"center", border:`1px solid ${C.red}40` }}>
+            <div style={{ fontSize:40, marginBottom:12 }}>ð«</div>
+            <h3 style={{ color:C.text, margin:"0 0 10px" }}>Inappropriate Language</h3>
+            <p style={{ color:C.muted, fontSize:14, lineHeight:1.7, marginBottom:20 }}>
+              Your message contains content that violates our community guidelines. Please keep conversations respectful.
+            </p>
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={() => { setProfanityWarning(false); setNewMsg(""); }}
+                style={{ flex:1, background:"transparent", color:C.muted, border:`1px solid ${C.border}`, borderRadius:12, padding:"11px 0", cursor:"pointer" }}>Clear Message</button>
+              <button onClick={() => setProfanityWarning(false)}
+                style={{ flex:1, background:C.accent, color:"#fff", border:"none", borderRadius:12, padding:"11px 0", cursor:"pointer", fontWeight:700 }}>Edit Message</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ââ Full Profile overlay */}
       {viewProfile && <ProfileView profile={viewProfile} onClose={() => setViewProfile(null)} />}
 
-      {/* ─── Nav */}
+      {/* ââ Nav */}
       <div style={{ background:C.surface, borderBottom:`1px solid ${C.border}`, padding:"0 8px", display:"flex", alignItems:"center", justifyContent:"space-between", height:56, position:"sticky", top:0, zIndex:100 }}>
-        <span style={{ fontWeight:900, fontSize:18, color:C.accent }}>💜 VyndLove</span>
+        <span style={{ fontWeight:900, fontSize:18, color:C.accent }}>ð VyndLove</span>
         <nav style={{ display:"flex", gap:1 }}>
           {navItems.map(n => (
             <button key={n} onClick={() => setPage(n)}
@@ -993,7 +1198,7 @@ export default function App() {
       {page === "Discover" && (
         <div style={{ maxWidth:600, margin:"0 auto", padding:"20px 16px 100px" }}>
           <div style={{ display:"flex", gap:8, marginBottom:20, background:C.surface, borderRadius:12, padding:4 }}>
-            {[["feed","Feed"],["compatible","💜 Best Match"],["standouts","⭐ Standouts"]].map(([id,label]) => (
+            {[["feed","Feed"],["compatible","ð Best Match"],["standouts","â­ Standouts"]].map(([id,label]) => (
               <button key={id} onClick={() => setDiscoverTab(id)}
                 style={{ flex:1, background: discoverTab===id ? (id==="standouts" ? C.goldDim : C.accentDim) : "transparent", color: discoverTab===id ? (id==="standouts" ? C.gold : C.accent) : C.muted, border:"none", borderRadius:9, padding:"8px 0", cursor:"pointer", fontWeight:600, fontSize:12 }}>
                 {label}
@@ -1003,14 +1208,14 @@ export default function App() {
 
           {!isPremium && discoverTab !== "standouts" && (
             <div style={{ background:C.accentDim, borderRadius:12, padding:"10px 14px", marginBottom:16, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <span style={{ color:C.accent, fontSize:13, fontWeight:600 }}>💜 {likesLeft} likes left today</span>
+              <span style={{ color:C.accent, fontSize:13, fontWeight:600 }}>ð {likesLeft} likes left today</span>
               <button onClick={() => setPage("Pricing")} style={{ background:C.accent, color:"#fff", border:"none", borderRadius:8, padding:"5px 12px", cursor:"pointer", fontSize:12, fontWeight:700 }}>Upgrade</button>
             </div>
           )}
 
           {yourTurn >= MAX_YOUR_TURN && (
             <div style={{ background:"#ef444418", borderRadius:12, padding:"12px 14px", marginBottom:16, border:`1px solid ${C.red}40` }}>
-              <p style={{ color:C.red, fontSize:13, margin:"0 0 8px", fontWeight:600 }}>⚠️ You have {yourTurn} conversations waiting for your reply. Respond before liking more people.</p>
+              <p style={{ color:C.red, fontSize:13, margin:"0 0 8px", fontWeight:600 }}>â ï¸ You have {yourTurn} conversations waiting for your reply. Respond before liking more people.</p>
               <button onClick={() => setPage("Chat")} style={{ background:C.red, color:"#fff", border:"none", borderRadius:8, padding:"6px 14px", cursor:"pointer", fontSize:12, fontWeight:700 }}>Go to Chat</button>
             </div>
           )}
@@ -1018,15 +1223,18 @@ export default function App() {
           {discoverTab === "feed" && (
             <>
               {compatible && <ProfileCard profile={compatible} isCompatible />}
-              {profiles.length === 0 && (
-                <div style={{ textAlign:"center", padding:60, color:C.muted }}>
-                  <div style={{ fontSize:48, marginBottom:12 }}>💜</div>
-                  <p>No profiles yet. Check back soon!</p>
+              {profiles.length === 0 ? (
+                <div style={{ textAlign:"center", padding:60, color:C.muted, background:C.card, borderRadius:20, border:`1px solid ${C.border}` }}>
+                  <div style={{ fontSize:48, marginBottom:12 }}>ð</div>
+                  <p style={{ fontWeight:600, color:C.text, marginBottom:8 }}>New users are joining!</p>
+                  <p style={{ fontSize:13, marginBottom:20 }}>Check back soon â your next match could be minutes away.</p>
+                  <button onClick={() => window.location.reload()} style={{ background:C.accent, color:"#fff", border:"none", borderRadius:10, padding:"10px 24px", cursor:"pointer", fontWeight:700, fontSize:14 }}>Refresh</button>
                 </div>
+              ) : (
+                profiles.filter(p => p.id !== compatible?.id).map(p => (
+                  <ProfileCard key={p.id} profile={p} />
+                ))
               )}
-              {profiles.filter(p => p.id !== compatible?.id).map(p => (
-                <ProfileCard key={p.id} profile={p} />
-              ))}
             </>
           )}
 
@@ -1035,38 +1243,48 @@ export default function App() {
               <p style={{ color:C.muted, fontSize:13, marginBottom:16 }}>Your best match for today. Refreshes every 24 hours.</p>
               {compatible
                 ? <ProfileCard profile={compatible} isCompatible />
-                : <div style={{ textAlign:"center", padding:60, color:C.muted }}><p>Generating your match…</p></div>}
+                : <div style={{ textAlign:"center", padding:60, color:C.muted, background:C.card, borderRadius:20 }}>
+                    <div style={{ fontSize:48, marginBottom:12 }}>ð</div>
+                    <p style={{ fontWeight:600, color:C.text, marginBotton:8 }}>New users are joining!</p>
+                    <p style={{ fontSize:13 }}>Your Most Compatible match will appear once more people join.</p>
+                  </div>
+              }
             </div>
           )}
 
           {discoverTab === "standouts" && (
             <div>
               <div style={{ background:C.goldDim, borderRadius:12, padding:"12px 14px", marginBottom:16, border:`1px solid ${C.gold}40` }}>
-                <p style={{ color:C.gold, fontSize:13, margin:"0 0 4px", fontWeight:600 }}>⭐ Standouts are curated profiles with 4+ photos & full prompts.</p>
+                <p style={{ color:C.gold, fontSize:13, margin:"0 0 4px", fontWeight:600 }}>â­ Standouts are curated profiles with 4+ photos & full prompts.</p>
                 <p style={{ color:C.muted, fontSize:12, margin:0 }}>Only Priority Likes allowed here. {priorityLeft} priority like{priorityLeft !== 1 ? "s" : ""} remaining this week.</p>
               </div>
-              {standouts.length === 0 && (
-                <div style={{ textAlign:"center", padding:60, color:C.muted }}><p>No standouts right now. Check back soon.</p></div>
-              )}
-              {standouts.map(p => (
-                <div key={p.id} onClick={() => setViewProfile(p)}
-                  style={{ background:C.card, borderRadius:20, overflow:"hidden", border:`2px solid ${C.gold}`, cursor:"pointer", marginBottom:12 }}>
-                  {(p.photos||[]).find(Boolean) && (
-                    <img src={(p.photos||[]).find(Boolean)} alt={p.name} style={{ width:"100%", height:240, objectFit:"cover", display:"block" }}
-                      onError={e => { e.target.style.display="none"; }} />
-                  )}
-                  <div style={{ padding:"14px 16px" }}>
-                    <div style={{ fontWeight:700, fontSize:16, color:C.text }}>{p.name}, {p.age}
-                      {p.verified && <span style={{ marginLeft:8, color:C.purple, fontSize:12 }}>✓</span>}
-                    </div>
-                    <div style={{ color:C.muted, fontSize:13, marginTop:2, marginBottom:12 }}>📍 {p.city}</div>
-                    <button onClick={e => { e.stopPropagation(); setLikeTarget({ profileId:p.id, itemType:"profile", itemIndex:0, isPriority:true }); setLikeComment(""); setLikeError(""); }}
-                      style={{ width:"100%", background:C.goldDim, color:C.gold, border:`1px solid ${C.gold}`, borderRadius:10, padding:"10px 0", cursor:"pointer", fontWeight:700, fontSize:14 }}>
-                      ⭐ Priority Like
-                    </button>
-                  </div>
+              {standouts.length === 0 ? (
+                <div style={{ textAlign:"center", padding:60, color:C.muted, background:C.card, borderRadius:20 }}>
+                  <div style={{ fontSize:48, marginBottom:12 }}>â­</div>
+                  <p style={{ fontWeight:600, color:C.text, marginBotton:8 }}>More Standouts coming soon!</p>
+                  <p style={{ fontSize:13 }}>Standouts are profiles with 4+ photos and all prompts answered. Encourage your matches to complete their profiles!</p>
                 </div>
-              ))}
+              ) : (
+                standouts.map(p => (
+                  <div key={p.id} onClick={() => setViewProfile(p)}
+                    style={{ background:C.card, borderRadius:20, overflow:"hidden", border:`2px solid ${C.gold}`, cursor:"pointer", marginBottom:12 }}>
+                    {(p.photos||[]).find(Boolean) && (
+                      <img src={(p.photos||[]).find(Boolean)} alt={p.name} style={{ width:"100%", height:240, objectFit:"cover", display:"block" }}
+                        onError={e => { e.target.style.display="none"; }} />
+                    )}
+                    <div style={{ padding:"14px 16px" }}>
+                      <div style={{ fontWeight:700, fontSize:16, color:C.text }}>{p.name}, {p.age}
+                        {p.verified && <span style={{ marginLeft:8, color:C.purple, fontSize:12 }}>â</span>}
+                      </div>
+                      <div style={{ color:C.muted, fontSize:13, marginTop:2, marginBottom:12 }}>ð {p.city}</div>
+                      <button onClick={e => { e.stopPropagation(); setLikeTarget({ profileId:p.id, itemType:"profile", itemIndex:0, isPriority:true }); setLikeComment(""); setLikeError(""); }}
+                        style={{ width:"100%", background:C.goldDim, color:C.gold, border:`1px solid ${C.gold}`, borderRadius:10, padding:"10px 0", cursor:"pointer", fontWeight:700, fontSize:14 }}>
+                        â­ Priority Like
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           )}
         </div>
@@ -1075,12 +1293,13 @@ export default function App() {
       {/* ===================== LIKES RECEIVED (Pro/Elite) ===================== */}
       {page === "Likes" && (
         <div style={{ maxWidth:700, margin:"0 auto", padding:"28px 16px 80px" }}>
-          <h1 style={{ margin:"0 0 6px", fontSize:22 }}>Who Liked You 💜</h1>
+          <h1 style={{ margin:"0 0 6px", fontSize:22 }}>Who Liked You ð</h1>
           <p style={{ color:C.muted, fontSize:13, marginBottom:20 }}>People who liked one of your photos or prompts.</p>
           {likesReceived.length === 0 ? (
-            <div style={{ textAlign:"center", padding:60, background:C.card, borderRadius:20 }}>
-              <div style={{ fontSize:48, marginBottom:12 }}>🤍</div>
-              <p style={{ color:C.muted }}>No likes yet — keep your profile fresh!</p>
+            <div style={{ textAlign:"center", padding:60, background:C.card, borderRadius:20, border:`1px solid ${C.border}` }}>
+              <div style={{ fontSize:48, marginBottom:12 }}>ð¤</div>
+              <p style={{ fontWeight:600, color:C.text, marginBottom:8 }}>No likes yet!</p>
+              <p style={{ color:C.muted, fontSize:13 }}>Keep your profile fresh â likes start rolling in once more people discover you.</p>
             </div>
           ) : (
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))", gap:14 }}>
@@ -1092,11 +1311,11 @@ export default function App() {
                     <div style={{ height:100, background:`linear-gradient(135deg,${C.accent}30,${C.purple}15)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:40 }}>
                       {profile && (profile.photos||[]).find(Boolean)
                         ? <img src={(profile.photos||[]).find(Boolean)} style={{ width:"100%", height:100, objectFit:"cover" }} alt="" onError={e => { e.target.style.display="none"; }} />
-                        : "💜"}
+                        : "ð"}
                     </div>
                     <div style={{ padding:"10px 12px" }}>
                       <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{profile?.name || "Someone"}</div>
-                      {profile && <div style={{ color:C.muted, fontSize:12 }}>{profile.age} · {profile.city}</div>}
+                      {profile && <div style={{ color:C.muted, fontSize:12 }}>{profile.age} Â· {profile.city}</div>}
                       {like.comment && <div style={{ color:C.accent, fontSize:12, marginTop:6, fontStyle:"italic" }}>"{like.comment}"</div>}
                       <div style={{ color:C.muted, fontSize:11, marginTop:4 }}>Liked your {like.itemType}</div>
                     </div>
@@ -1111,11 +1330,12 @@ export default function App() {
       {/* ===================== MATCHES ===================== */}
       {page === "Matches" && (
         <div style={{ maxWidth:700, margin:"0 auto", padding:"28px 16px 80px" }}>
-          <h1 style={{ margin:"0 0 20px", fontSize:22 }}>Your Matches 💜</h1>
+          <h1 style={{ margin:"0 0 20px", fontSize:22 }}>Your Matches ð</h1>
           {matches.length === 0 ? (
-            <div style={{ textAlign:"center", padding:60, background:C.card, borderRadius:20 }}>
-              <div style={{ fontSize:48, marginBottom:12 }}>💜</div>
-              <p style={{ color:C.muted, marginBottom:16 }}>No matches yet — go connect with people!</p>
+            <div style={{ textAlign:"center", padding:60, background:C.card, borderRadius:20, border:`1px solid ${C.border}` }}>
+              <div style={{ fontSize:48, marginBottom:12 }}>ð</div>
+              <p style={{ fontWeight:600, color:C.text, marginBottom:8 }}>No matches yet!</p>
+              <p style={{ color:C.muted, fontSize:13, marginBottom:20 }}>New users are joining every day. Start liking profiles and your first match could be right around the corner.</p>
               <button onClick={() => setPage("Discover")} style={{ background:C.accent, color:"#fff", border:"none", borderRadius:10, padding:"10px 28px", cursor:"pointer", fontWeight:700 }}>Browse Profiles</button>
             </div>
           ) : (
@@ -1126,16 +1346,16 @@ export default function App() {
                 const isMyTurn = m.lastMessageFrom && m.lastMessageFrom !== user.uid;
                 return (
                   <div key={m.id} style={{ background:C.card, borderRadius:16, overflow:"hidden", border:`1px solid ${isMyTurn ? C.accent : C.border}`, position:"relative" }}>
-                    {isMyTurn  && <div style={{ position:"absolute", top:8, right:8, background:C.accent, color:"#fff", borderRadius:20, padding:"2px 8px", fontSize:10, fontWeight:700, zIndex:1 }}>Your Turn ↩</div>}
+                    {isMyTurn  && <div style={{ position:"absolute", top:8, right:8, background:C.accent, color:"#fff", borderRadius:20, padding:"2px 8px", fontSize:10, fontWeight:700, zIndex:1 }}>Your Turn â©</div>}
                     {unread > 0 && <div style={{ position:"absolute", top:8, left:8, background:C.red, color:"#fff", borderRadius:"50%", width:18, height:18, fontSize:11, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, zIndex:1 }}>{unread}</div>}
-                    <div style={{ height:90, background:`linear-gradient(135deg,${C.accent}30,${C.purple}10)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:40 }}>💜</div>
+                    <div style={{ height:90, background:`linear-gradient(135deg,${C.accent}30,${C.purple}10)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:40 }}>ð</div>
                     <div style={{ padding:12 }}>
                       <div style={{ fontWeight:700, color:C.text, marginBottom:8, fontSize:14 }}>Match!</div>
                       {m.lastActivity && <div style={{ color:C.muted, fontSize:11, marginBottom:6 }}>{timeAgo(m.lastActivity)}</div>}
                       <button onClick={() => { setChatWith({ userId:otherId, name:"Match" }); setPage("Chat"); }}
                         style={{ width:"100%", background:C.accentDim, color:C.accent, border:`1px solid ${C.accent}`, borderRadius:8, padding:"7px 0", cursor:"pointer", fontSize:12, fontWeight:600 }}>Message</button>
                       <button onClick={() => setFeedbackTarget({ matchId:m.id })}
-                        style={{ width:"100%", background:"transparent", color:C.muted, border:"none", padding:"5px 0", cursor:"pointer", fontSize:11, marginTop:4 }}>Did you meet? →</button>
+                        style={{ width:"100%", background:"transparent", color:C.muted, border:"none", padding:"5px 0", cursor:"pointer", fontSize:11, marginTop:4 }}>Did you meet? â</button>
                     </div>
                   </div>
                 );
@@ -1152,10 +1372,15 @@ export default function App() {
             <div style={{ padding:"14px 14px 8px", color:C.muted, fontSize:12, fontWeight:700, textTransform:"uppercase" }}>Conversations</div>
             {yourTurn > 0 && (
               <div style={{ margin:"0 10px 8px", background:C.accentDim, borderRadius:8, padding:"8px 10px", fontSize:11, color:C.accent, fontWeight:600 }}>
-                💜 {yourTurn} conversation{yourTurn>1?"s":""} waiting for you
+                ð {yourTurn} conversation{yourTurn>1?"s":""} waiting for you
               </div>
             )}
-            {matches.length === 0 && <div style={{ padding:16, color:C.muted, fontSize:13 }}>No matches yet</div>}
+            {matches.length === 0 && (
+              <div style={{ padding:24, textAlign:"center", color:C.muted }}>
+                <div style={{ fontSize:28, marginBottom:8 }}>ð</div>
+                <p style={{ fontSize:12 }}>No matches yet. Keep swiping!</p>
+              </div>
+            )}
             {matches.map(m => {
               const otherId  = m.users.find(u => u !== user.uid);
               const isMyTurn = m.lastMessageFrom && m.lastMessageFrom !== user.uid;
@@ -1164,12 +1389,12 @@ export default function App() {
                 <div key={m.id} onClick={() => setChatWith({ userId:otherId, name:"Match" })}
                   style={{ padding:"11px 14px", display:"flex", gap:10, alignItems:"center", cursor:"pointer", background: chatWith?.userId===otherId ? C.accentDim : "transparent", borderBottom:`1px solid ${C.border}` }}>
                   <div style={{ position:"relative", flexShrink:0 }}>
-                    <div style={{ width:36, height:36, borderRadius:"50%", background:`linear-gradient(135deg,${C.accent},${C.purple})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>💜</div>
+                    <div style={{ width:36, height:36, borderRadius:"50%", background:`linear-gradient(135deg,${C.accent},${C.purple})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>ð</div>
                     {unread > 0 && <div style={{ position:"absolute", top:-2, right:-2, background:C.red, color:"#fff", borderRadius:"50%", width:14, height:14, fontSize:9, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700 }}>{unread}</div>}
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontWeight:600, fontSize:13, color:C.text }}>Match</div>
-                    {isMyTurn && <div style={{ color:C.accent, fontSize:11, fontWeight:600 }}>Your turn ↩</div>}
+                    {isMyTurn && <div style={{ color:C.accent, fontSize:11, fontWeight:600 }}>Your turn â©</div>}
                     {m.lastMessage && !isMyTurn && <div style={{ color:C.muted, fontSize:11, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.lastMessage}</div>}
                     {m.lastActivity && <div style={{ color:C.muted, fontSize:10, marginTop:2 }}>{timeAgo(m.lastActivity)}</div>}
                   </div>
@@ -1182,7 +1407,7 @@ export default function App() {
             {chatWith ? (
               <>
                 <div style={{ padding:"12px 16px", borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", gap:12 }}>
-                  <div style={{ width:34, height:34, borderRadius:"50%", background:`linear-gradient(135deg,${C.accent},${C.purple})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>💜</div>
+                  <div style={{ width:34, height:34, borderRadius:"50%", background:`linear-gradient(135deg,${C.accent},${C.purple})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>ð</div>
                   <div style={{ flex:1 }}>
                     <div style={{ fontWeight:700, color:C.text }}>{chatWith.name}</div>
                     {(() => {
@@ -1191,15 +1416,15 @@ export default function App() {
                     })()}
                   </div>
                   <button onClick={() => setReportTarget({ id:chatWith.userId, name:chatWith.name })}
-                    style={{ background:"transparent", color:C.muted, border:"none", fontSize:12, cursor:"pointer" }}>⚑ Report</button>
+                    style={{ background:"transparent", color:C.muted, border:"none", fontSize:12, cursor:"pointer" }}>â Report</button>
                 </div>
                 <div style={{ background:"#c026d312", padding:"6px 16px", fontSize:11, color:"#c026d3" }}>
-                  🛡️ Never share personal info before meeting in person.
+                  ð¡ï¸ Never share personal info before meeting in person.
                 </div>
                 <div style={{ flex:1, overflowY:"auto", padding:16, display:"flex", flexDirection:"column", gap:10 }}>
                   {messages.length === 0 && (
                     <div style={{ textAlign:"center", color:C.muted, padding:40 }}>
-                      <div style={{ fontSize:32, marginBottom:8 }}>💜</div>
+                      <div style={{ fontSize:32, marginBottom:8 }}>ð</div>
                       <p style={{ fontSize:14 }}>You matched! Be the first to say something genuine.</p>
                     </div>
                   )}
@@ -1222,7 +1447,7 @@ export default function App() {
               </>
             ) : (
               <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", color:C.muted, flexDirection:"column", gap:12 }}>
-                <div style={{ fontSize:36 }}>💜</div>
+                <div style={{ fontSize:36 }}>ð</div>
                 <p style={{ fontSize:14 }}>Select a conversation to start chatting</p>
               </div>
             )}
@@ -1235,7 +1460,7 @@ export default function App() {
         <div style={{ maxWidth:860, margin:"0 auto", padding:"36px 16px 80px" }}>
           <div style={{ textAlign:"center", marginBottom:36 }}>
             <h1 style={{ margin:"0 0 8px", fontSize:28, fontWeight:900 }}>Choose Your Plan</h1>
-            <p style={{ color:C.muted }}>Cancel anytime. Secure Stripe checkout.</p>
+            <p style={{ color:C.muted }}>Cancel anytime. {IS_MOBILE_BUILD ? "Manage subscriptions in your app store." : "Secure Stripe checkout."}</p>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:18, marginBottom:32 }}>
             {PLANS.map(plan => (
@@ -1249,12 +1474,18 @@ export default function App() {
                 </div>
                 {plan.features.map(f => (
                   <div key={f} style={{ display:"flex", gap:8, fontSize:13, marginBottom:8 }}>
-                    <span style={{ color:plan.color }}>✓</span>
+                    <span style={{ color:plan.color }}>â</span>
                     <span style={{ color:"#ccc" }}>{f}</span>
                   </div>
                 ))}
-                {plan.id && (
+                {plan.id && !IS_MOBILE_BUILD && (
                   <button onClick={() => window.open(STRIPE_LINKS[plan.id], "_blank")}
+                    style={{ width:"100%", marginTop:14, background:plan.color, color: plan.id==="elite" ? "#000" : "#fff", border:"none", borderRadius:11, padding:"10px 0", cursor:"pointer", fontWeight:700, fontSize:14 }}>
+                    {plan.cta}
+                  </button>
+                )}
+                {plan.id && IS_MOBILE_BUILD && (
+                  <button onClick={() => alert("Upgrade available in your device's app store.")}
                     style={{ width:"100%", marginTop:14, background:plan.color, color: plan.id==="elite" ? "#000" : "#fff", border:"none", borderRadius:11, padding:"10px 0", cursor:"pointer", fontWeight:700, fontSize:14 }}>
                     {plan.cta}
                   </button>
@@ -1262,7 +1493,7 @@ export default function App() {
               </div>
             ))}
           </div>
-          <div style={{ background:C.card, borderRadius:18, padding:22, border:`1px solid ${C.border}` }}>
+          <div style={{ background:C.card, borderRadius:18, padding:22, border:`1px solid ${C.border}`, marginBottom:16 }}>
             <h3 style={{ margin:"0 0 12px", color:C.text }}>Legal</h3>
             <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
               {[["Privacy Policy","privacy"],["Terms of Service","terms"],["Cookie Policy","cookies"],["Safety Guide","safety"]].map(([label,id]) => (
@@ -1270,7 +1501,11 @@ export default function App() {
                   style={{ background:"transparent", color:C.accent, border:`1px solid ${C.border}`, borderRadius:8, padding:"7px 12px", cursor:"pointer", fontSize:13 }}>{label}</button>
               ))}
             </div>
-            <p style={{ color:C.muted, fontSize:12, marginTop:12, marginBottom:0 }}>GDPR · CCPA · COPPA Compliant. Payments secured by Stripe. © 2025 VyndLove Inc.</p>
+            <p style={{ color:C.muted, fontSize:12, marginTop:12, marginBottom:0 }}>GDPR Â· CCPA Â· COPPA Compliant. Payments secured by Stripe. Â© 2025 VyndLove Inc.</p>
+          </div>
+          <div style={{ background:C.card, borderRadius:12, padding:"14px 16px", border:`1px solid ${C.border}` }}>
+            <span style={{ color:C.muted, fontSize:13 }}>Questions? </span>
+            <button onClick={() => setShowContact(true)} style={{ background:"none", border:"none", color:C.accent, fontSize:13, cursor:"pointer", textDecoration:"underline" }}>Contact Support</button>
           </div>
         </div>
       )}
@@ -1280,44 +1515,46 @@ export default function App() {
         <div style={{ maxWidth:600, margin:"0 auto", padding:"28px 16px 80px" }}>
           <h1 style={{ margin:"0 0 20px", fontSize:22 }}>Settings</h1>
 
+          {/* Profile card */}
           <div style={{ background:C.card, borderRadius:16, padding:18, border:`1px solid ${C.border}`, marginBottom:12 }}>
             <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:12 }}>
               {(userProfile?.photos||[]).find(Boolean)
                 ? <img src={(userProfile.photos||[]).find(Boolean)} style={{ width:60, height:60, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.accent}` }} alt="you" />
-                : <div style={{ width:60, height:60, borderRadius:"50%", background:`linear-gradient(135deg,${C.accent},${C.purple})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:26 }}>💜</div>}
+                : <div style={{ width:60, height:60, borderRadius:"50%", background:`linear-gradient(135deg,${C.accent},${C.purple})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:26 }}>ð</div>}
               <div>
                 <div style={{ fontWeight:700, fontSize:17, color:C.text }}>
                   {userProfile?.name}
-                  {userProfile?.verified && <span style={{ marginLeft:8, color:C.purple, fontSize:13 }}>✓ Verified</span>}
+                  {userProfile?.verified && <span style={{ marginLeft:8, color:C.purple, fontSize:13 }}>â Verified</span>}
                 </div>
-                <div style={{ color:C.muted, fontSize:13 }}>{userProfile?.age} · {userProfile?.city}</div>
+                <div style={{ color:C.muted, fontSize:13 }}>{userProfile?.age} Â· {userProfile?.city}</div>
                 <div style={{ color: isPremium ? C.elite : C.accent, fontSize:12, marginTop:3, fontWeight:600 }}>
-                  {isPremium ? `⭐ ${userProfile?.plan?.toUpperCase()} Member` : "Free Plan"}
+                  {isPremium ? `â­ ${userProfile?.plan?.toUpperCase()} Member` : "Free Plan"}
                 </div>
               </div>
             </div>
             <div style={{ display:"flex", gap:16, fontSize:13, color:C.muted }}>
-              <span>💜 {likesLeft} likes left today</span>
-              <span>⭐ {priorityLeft} priority like{priorityLeft!=="∞"&&priorityLeft!==1?"s":""} left</span>
+              <span>ð {likesLeft} likes left today</span>
+              <span>â­ {priorityLeft} priority like{priorityLeft!=="â"&&priorityLeft!==1?"s":""} left</span>
             </div>
           </div>
 
           {isPremium && (
             <div style={{ background:C.purpleDim, borderRadius:12, padding:16, border:`1px solid ${C.purple}`, marginBottom:12 }}>
-              <p style={{ color:C.purple, margin:"0 0 10px", fontWeight:600 }}>⭐ Active {userProfile?.plan?.toUpperCase()} subscription</p>
+              <p style={{ color:C.purple, margin:"0 0 10px", fontWeight:600 }}>â­ Active {userProfile?.plan?.toUpperCase()} subscription</p>
               {userProfile?.cancelAtPeriodEnd
-                ? <p style={{ color:C.muted, fontSize:13, margin:0 }}>✓ Cancellation scheduled — access until end of billing period.</p>
+                ? <p style={{ color:C.muted, fontSize:13, margin:0 }}>â Cancellation scheduled â access until end of billing period.</p>
                 : <button onClick={() => { setShowCancelModal(true); setCancelStatus(null); }} style={{ background:"transparent", color:C.red, border:`1px solid #ef444455`, borderRadius:8, padding:"8px 18px", cursor:"pointer", fontWeight:700, fontSize:13 }}>Cancel Subscription</button>}
             </div>
           )}
 
           {!isPremium && (
             <div style={{ background:C.accentDim, borderRadius:12, padding:16, border:`1px solid ${C.accent}`, marginBottom:12 }}>
-              <p style={{ color:C.accent, margin:"0 0 10px", fontWeight:600 }}>Upgrade for unlimited likes 💜</p>
+              <p style={{ color:C.accent, margin:"0 0 10px", fontWeight:600 }}>Upgrade for unlimited likes ð</p>
               <button onClick={() => setPage("Pricing")} style={{ background:C.accent, color:"#fff", border:"none", borderRadius:8, padding:"8px 18px", cursor:"pointer", fontWeight:700, fontSize:13 }}>View Plans</button>
             </div>
           )}
 
+          {/* Legal links */}
           <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
             {[["Privacy","privacy"],["Terms","terms"],["Safety","safety"]].map(([label,id]) => (
               <button key={id} onClick={() => setLegal(id)}
@@ -1325,9 +1562,32 @@ export default function App() {
             ))}
           </div>
 
+          {/* Contact & Support */}
+          <div style={{ background:C.card, borderRadius:12, padding:"14px 16px", border:`1px solid ${C.border}`, marginBottom:12 }}>
+            <div style={{ fontWeight:600, marginBottom:6, color:C.text }}>Help & Support</div>
+            <p style={{ color:C.muted, fontSize:13, margin:"0 0 10px" }}>Questions, feedback, or issues? We're here to help.</p>
+            <button onClick={() => setShowContact(true)}
+              style={{ background:C.accentDim, color:C.accent, border:`1px solid ${C.accent}`, borderRadius:8, padding:"8px 16px", cursor:"pointer", fontWeight:600, fontSize:13 }}>
+              Contact Support
+            </button>
+          </div>
+
+          {/* Emergency resources */}
           <div style={{ background:C.card, borderRadius:12, padding:"14px 16px", border:`1px solid ${C.border}`, marginBottom:12 }}>
             <div style={{ fontWeight:600, marginBottom:6, color:C.text }}>Emergency Resources</div>
-            <div style={{ color:C.muted, fontSize:13, lineHeight:1.8 }}>911 · RAINN: 1-800-656-4673 · Crisis Text: HOME to 741741</div>
+            <div style={{ color:C.muted, fontSize:13, lineHeight:1.8 }}>
+              911 (US) Â· RAINN: 1-800-656-4673 Â· Crisis Text: HOME to 741741 Â· National DV Hotline: 1-800-799-7233
+            </div>
+          </div>
+
+          {/* Delete Account (v4 Step 1) */}
+          <div style={{ background:"#ef444408", borderRadius:12, padding:"14px 16px", border:`1px solid ${C.red}20`, marginBottom:12 }}>
+            <div style={{ fontWeight:600, marginBottom:6, color:C.red }}>Danger Zone</div>
+            <p style={{ color:C.muted, fontSize:13, margin:"0 0 10px" }}>Permanently delete your account and all associated data. This action cannot be undone.</p>
+            <button onClick={() => { setShowDeleteAccount(true); setDeleteConfirmText(""); }}
+              style={{ background:"transparent", color:C.red, border:`1px solid ${C.red}`, borderRadius:8, padding:"8px 16px", cursor:"pointer", fontWeight:700, fontSize:13 }}>
+              Delete Account
+            </button>
           </div>
 
           <button onClick={() => signOut(auth)}
@@ -1338,7 +1598,15 @@ export default function App() {
       )}
 
       <div style={{ textAlign:"center", padding:20, color:C.muted, fontSize:12, borderTop:`1px solid ${C.border}`, marginTop:40 }}>
-        VyndLove Inc. · New York, NY · © 2025 All rights reserved · GDPR · CCPA · COPPA
+        VyndLove Inc. Â· New York, NY Â· Â© 2025 All rights reserved Â· GDPR Â· CCPA Â· COPPA
+        <br />
+        <button onClick={() => setShowContact(true)} style={{ background:"none", border:"none", color:C.accent, fontSize:12, cursor:"pointer", marginTop:6, textDecoration:"underline" }}>
+          Contact Support
+        </button>
+        {" Â· "}
+        <button onClick={() => setLegal("privacy")} style={{ background:"none", border:"none", color:C.accent, fontSize:12, cursor:"pointer", textDecoration:"underline" }}>Privacy</button>
+        {" Â· "}
+        <button onClick={() => setLegal("terms")} style={{ background:"none", border:"none", color:C.accent, fontSize:12, cursor:"pointer", textDecoration:"underline" }}>Terms</button>
       </div>
     </div>
   );
