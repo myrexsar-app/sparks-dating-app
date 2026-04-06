@@ -56,9 +56,9 @@ const MIN_PHOTOS = 1;
 const MAX_PHOTOS = 6;
 
 const STRIPE_LINKS = {
-  weekly: "https://buy.stripe.com/test_weekly",
-  monthly: "https://buy.stripe.com/test_monthly",
-  yearly: "https://buy.stripe.com/test_yearly",
+  weekly: "https://buy.stripe.com/aFa14n1TZ2J48Uc3VUgbm02",
+  monthly: "https://buy.stripe.com/eVq28r6afbfA5I0eAygbm03",
+  yearly: "https://buy.stripe.com/eVq5kD0PV5Vg3zSdwugbm04",
 };
 
 /* ─── Prompt Options ─── */
